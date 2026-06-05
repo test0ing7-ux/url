@@ -128,7 +128,7 @@ app.all('*', async (req, res) => {
     try {
         const protocol = req.headers['x-forwarded-proto'] || 'https';
         const host = req.headers.host || '';
-        const fullUrl = new URL(req.originalUrl || req.url, \`\${protocol}://\${host}\`);
+        const fullUrl = new URL(req.originalUrl || req.url, protocol + '://' + host);
 
         // 1. MOCK TESTPAD SECURITY VALIDATION
         if (fullUrl.searchParams.get("json") === "1") {
@@ -205,7 +205,7 @@ app.all('*', async (req, res) => {
         if (contentType.includes("text/html")) {
             let html = await response.text();
             
-            const escapedHost = originalHost.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&');
+            const escapedHost = originalHost.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const hostRegex = new RegExp('https?://' + escapedHost, 'g');
             html = html.replace(hostRegex, 'https://' + host);
 
@@ -235,5 +235,5 @@ app.all('*', async (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(\`Proxy server running on port \${PORT}\`);
+    console.log('Proxy server running on port ' + PORT);
 });
