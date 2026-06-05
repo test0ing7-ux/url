@@ -124,13 +124,7 @@ const SOLVER_SCRIPT = `
 </script>
 `;
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
     try {
         const protocol = req.headers['x-forwarded-proto'] || 'https';
         const host = req.headers.host;
@@ -237,4 +231,10 @@ export default async function handler(req, res) {
         console.error(err);
         res.status(502).send("Proxy error: " + err.message);
     }
-}
+};
+
+module.exports.config = {
+  api: {
+    bodyParser: false,
+  },
+};
