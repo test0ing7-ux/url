@@ -3,7 +3,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const API_KEY = process.env.GROQ_API_KEY || "YOUR_GROQ_API_KEY_HERE";
-const PROXY_DOMAIN = ".mooo.com"; 
+const PROXY_DOMAIN = process.env.PROXY_DOMAIN || ".mooo.com";
 
 const SOLVER_SCRIPT = `
 <script>
