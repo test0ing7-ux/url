@@ -136,15 +136,8 @@ module.exports = async function handler(req, res) {
             return res.status(200).send(JSON.stringify({ quiz: true, id: "proxy-test" }));
         }
 
-        // 2. EXTRACT ORIGINAL HOST
-        if (!host.endsWith(PROXY_DOMAIN)) {
-            return res.status(400).send("Invalid proxy domain mapping. Hostname must end with " + PROXY_DOMAIN);
-        }
-
-        const originalHost = host.slice(0, -PROXY_DOMAIN.length);
-        if (!originalHost) {
-            return res.status(400).send("Missing original domain.");
-        }
+        // 2. HARDCODED TARGET HOST
+        const originalHost = "exam.testpad.chitkarauniversity.edu.in";
 
         const fetchUrl = "https://" + originalHost + fullUrl.pathname + fullUrl.search;
 
@@ -154,9 +147,9 @@ module.exports = async function handler(req, res) {
             if (['host', 'connection', 'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port', 'x-vercel-id', 'x-vercel-forwarded-for', 'x-vercel-ip-timezone', 'x-vercel-ip-country'].includes(key.toLowerCase())) continue;
             
             if (key.toLowerCase() === 'origin') {
-                proxyHeaders.set(key, value.replace(PROXY_DOMAIN, ""));
+                proxyHeaders.set(key, value.replace(host, originalHost));
             } else if (key.toLowerCase() === 'referer') {
-                proxyHeaders.set(key, value.replace(PROXY_DOMAIN, ""));
+                proxyHeaders.set(key, value.replace(host, originalHost));
             } else {
                 proxyHeaders.set(key, value);
             }
