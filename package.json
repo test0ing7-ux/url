@@ -4,6 +4,6 @@
   "description": "Vercel proxy function",
   "main": "api/index.js",
   "engines": {
-    "node": "18.x"
+    "node": "24.x"
   }
 }
