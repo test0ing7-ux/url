@@ -1,12 +1,9 @@
-// Vercel Serverless Function Proxy
-const API_KEY = process.env.GROQ_API_KEY || "YOUR_GROQ_API_KEY_HERE";
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-// ==========================================
-// CONFIGURATION
-// Replace this with the free domain you get from FreeDNS
-// MUST INCLUDE THE LEADING DOT. Example: ".mooo.com"
+const API_KEY = process.env.GROQ_API_KEY || "YOUR_GROQ_API_KEY_HERE";
 const PROXY_DOMAIN = ".mooo.com"; 
-// ==========================================
 
 const SOLVER_SCRIPT = `
 <script>
@@ -124,11 +121,14 @@ const SOLVER_SCRIPT = `
 </script>
 `;
 
-module.exports = async function handler(req, res) {
+// Parse bodies as raw buffers
+app.use(express.raw({ type: '*/*', limit: '10mb' }));
+
+app.all('*', async (req, res) => {
     try {
         const protocol = req.headers['x-forwarded-proto'] || 'https';
-        const host = req.headers.host;
-        const fullUrl = new URL(req.url, `${protocol}://${host}`);
+        const host = req.headers.host || '';
+        const fullUrl = new URL(req.originalUrl || req.url, \`\${protocol}://\${host}\`);
 
         // 1. MOCK TESTPAD SECURITY VALIDATION
         if (fullUrl.searchParams.get("json") === "1") {
@@ -136,20 +136,29 @@ module.exports = async function handler(req, res) {
             return res.status(200).send(JSON.stringify({ quiz: true, id: "proxy-test" }));
         }
 
-        // 2. HARDCODED TARGET HOST
-        const originalHost = "exam.testpad.chitkarauniversity.edu.in";
+        // 2. EXTRACT ORIGINAL HOST
+        if (!host.endsWith(PROXY_DOMAIN)) {
+            // For testing locally or via direct Railway URL
+            if (host.includes('localhost') || host.includes('127.0.0.1') || host.includes('railway.app') || host.includes('up.railway.app')) {
+                return res.status(400).send("Please use the " + PROXY_DOMAIN + " domain to access this proxy.");
+            }
+            return res.status(400).send("Invalid proxy domain mapping. Hostname must end with " + PROXY_DOMAIN);
+        }
 
-        const fetchUrl = "https://" + originalHost + fullUrl.pathname + fullUrl.search;
+        const originalHost = host.slice(0, -PROXY_DOMAIN.length);
+        if (!originalHost) {
+            return res.status(400).send("Missing original domain.");
+        }
+
+        const fetchUrl = "https://" + originalHost + req.originalUrl;
 
         // 3. BUILD PROXY REQUEST
         const proxyHeaders = new Headers();
         for (const [key, value] of Object.entries(req.headers)) {
-            if (['host', 'connection', 'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port', 'x-vercel-id', 'x-vercel-forwarded-for', 'x-vercel-ip-timezone', 'x-vercel-ip-country'].includes(key.toLowerCase())) continue;
+            if (['host', 'connection', 'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port'].includes(key.toLowerCase())) continue;
             
-            if (key.toLowerCase() === 'origin') {
-                proxyHeaders.set(key, value.replace(host, originalHost));
-            } else if (key.toLowerCase() === 'referer') {
-                proxyHeaders.set(key, value.replace(host, originalHost));
+            if (key.toLowerCase() === 'origin' || key.toLowerCase() === 'referer') {
+                proxyHeaders.set(key, value.replace(PROXY_DOMAIN, ""));
             } else {
                 proxyHeaders.set(key, value);
             }
@@ -162,15 +171,8 @@ module.exports = async function handler(req, res) {
             redirect: "manual"
         };
 
-        // Read raw body stream
-        if (req.method !== 'GET' && req.method !== 'HEAD') {
-            const chunks = [];
-            for await (const chunk of req) {
-                chunks.push(chunk);
-            }
-            if (chunks.length > 0) {
-                fetchOptions.body = Buffer.concat(chunks);
-            }
+        if (req.method !== 'GET' && req.method !== 'HEAD' && Buffer.isBuffer(req.body) && req.body.length > 0) {
+            fetchOptions.body = req.body;
         }
 
         const response = await fetch(fetchUrl, fetchOptions);
@@ -181,9 +183,15 @@ module.exports = async function handler(req, res) {
             if (['content-encoding', 'content-length', 'transfer-encoding', 'connection'].includes(key.toLowerCase())) continue;
             
             if (key.toLowerCase() === 'set-cookie') {
-                const cookies = response.headers.getSetCookie();
-                const rewrittenCookies = cookies.map(c => c.replace(/domain=[^;]+;?/gi, ""));
-                res.setHeader('Set-Cookie', rewrittenCookies);
+                // Fetch API returns multiple cookies as a single comma-separated string sometimes,
+                // but getSetCookie() handles it properly in Node 20+
+                if (response.headers.getSetCookie) {
+                    const cookies = response.headers.getSetCookie();
+                    const rewrittenCookies = cookies.map(c => c.replace(/domain=[^;]+;?/gi, ""));
+                    res.setHeader('Set-Cookie', rewrittenCookies);
+                } else {
+                    res.setHeader(key, value.replace(/domain=[^;]+;?/gi, ""));
+                }
             } else {
                 res.setHeader(key, value);
             }
@@ -197,7 +205,7 @@ module.exports = async function handler(req, res) {
         if (contentType.includes("text/html")) {
             let html = await response.text();
             
-            const escapedHost = originalHost.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const escapedHost = originalHost.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&');
             const hostRegex = new RegExp('https?://' + escapedHost, 'g');
             html = html.replace(hostRegex, 'https://' + host);
 
@@ -214,8 +222,8 @@ module.exports = async function handler(req, res) {
         // Pass through non-HTML
         res.status(response.status);
         if (response.body) {
-            const buffer = await response.arrayBuffer();
-            res.send(Buffer.from(buffer));
+            const arrayBuffer = await response.arrayBuffer();
+            res.send(Buffer.from(arrayBuffer));
         } else {
             res.send();
         }
@@ -224,10 +232,8 @@ module.exports = async function handler(req, res) {
         console.error(err);
         res.status(502).send("Proxy error: " + err.message);
     }
-};
+});
 
-module.exports.config = {
-  api: {
-    bodyParser: false,
-  },
-};
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(\`Proxy server running on port \${PORT}\`);
+});
