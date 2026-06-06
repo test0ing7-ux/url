@@ -133,6 +133,7 @@ app.all('*', async (req, res) => {
         // 1. MOCK TESTPAD SECURITY VALIDATION
         if (fullUrl.searchParams.get("json") === "1") {
             res.setHeader("Content-Type", "application/json");
+            res.setHeader("Access-Control-Allow-Origin", "*");
             return res.status(200).send(JSON.stringify({ quiz: true, id: "proxy-test" }));
         }
 
