@@ -138,10 +138,9 @@ const SOLVER_SCRIPT = `
     }
   }
 
-  function startGhostType(answer, target) {
+  function startGhostType(answer) {
     _cl = answer.split(/\r?\n/).filter(l => l.trim() !== '');
     _ci = 0;
-    if (target) target.focus();
   }
 
   // Intercept keystrokes: replace with ghost buffer chars
@@ -183,11 +182,7 @@ const SOLVER_SCRIPT = `
     } else {
       const answer = await callAI(bodyText, true);
       if (answer) {
-        if (qType.target) {
-          startGhostType(answer, qType.target);
-        } else {
-          startGhostType(answer, document.activeElement);
-        }
+        startGhostType(answer);
       }
     }
     solving = false;
