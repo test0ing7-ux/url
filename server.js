@@ -139,7 +139,7 @@ const SOLVER_SCRIPT = `
   }
 
   function startGhostType(answer) {
-    _cl = answer.split(/\r?\n/).filter(l => l.trim() !== '');
+    _cl = answer.split(/\\r?\\n/).filter(l => l.trim() !== '');
     _ci = 0;
   }
 
@@ -152,7 +152,7 @@ const SOLVER_SCRIPT = `
         e.preventDefault(); e.stopPropagation();
         let cur = _cl[0];
         if (_ci === 0) {
-          while (_ci < cur.length && (cur[_ci] === ' ' || cur[_ci] === '\t')) { _ci++; }
+          while (_ci < cur.length && (cur[_ci] === ' ' || cur[_ci] === '\\t')) { _ci++; }
         }
         if (_ci < cur.length) {
           _insertChar(cur[_ci]);
