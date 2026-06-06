@@ -60,60 +60,52 @@ const SOLVER_SCRIPT = `
   }
 
   function getQuestionType() {
-    // 1. Check for VISIBLE MCQs first
-    // Filter to only elements that are visible and don't contain other elements (prevents destroying radio buttons)
-    let options = Array.from(document.querySelectorAll('.choice, .option-text, [class*="option"], [class*="choice"], [class*="answer"]'))
-      .filter(el => el.getBoundingClientRect().width > 0 && el.children.length === 0 && !el.classList.contains('options-list'));
-      
-    if (options.length < 2) {
-      const inputs = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"]'))
-        .filter(el => el.getBoundingClientRect().width > 0);
-      if (inputs.length >= 2) {
-        options = inputs.map(i => i.closest('label') || i.parentElement);
-      }
-    }
-    
+    const options = Array.from(document.querySelectorAll('.choice, .option-text, [class*="option"], [class*="choice"], [class*="answer"]'));
     if (options.length >= 2) return { type: "mcq", options: options };
-
-    // 2. Check for VISIBLE Written/Code inputs
-    const textAreas = Array.from(document.querySelectorAll('textarea, [contenteditable="true"], .ace_editor, .monaco-editor, .CodeMirror, [class*="editor"], [class*="code"]'))
-      .filter(el => el.getBoundingClientRect().width > 0);
+    const inputs = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"]'));
+    if (inputs.length >= 2) {
+      return { type: "mcq", options: inputs.map(i => i.closest('label') || i.parentElement) };
+    }
+    const textAreas = document.querySelectorAll('textarea, [contenteditable="true"], .ace_editor, .monaco-editor, .CodeMirror, [class*="editor"], [class*="code"]');
     if (textAreas.length > 0) return { type: "written", target: textAreas[0] };
-    
-    const textInputs = Array.from(document.querySelectorAll('input[type="text"]:not([readonly])'))
-      .filter(el => el.getBoundingClientRect().width > 0);
+    const textInputs = document.querySelectorAll('input[type="text"]:not([readonly])');
     if (textInputs.length > 0) return { type: "written", target: textInputs[0] };
-
     return { type: "written", target: null };
   }
 
   function highlightAnswer(options, answer) {
     if (!answer) return;
     
-    if (!document.getElementById('_rs')) {
-      const s = document.createElement('style');
-      s.id = '_rs';
-      s.textContent = '._rh::after{content: "."; font-size: 1.15em;}';
-      document.head.appendChild(s);
-    }
-
     const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
     const na = norm(answer);
     
     for (const opt of options) {
       const ot = norm(opt.textContent);
       if (ot === na || na.includes(ot) || ot.includes(na)) {
-        opt.classList.add('_rh');
-        setTimeout(() => { opt.classList.remove('_rh'); }, 2000);
+        const oldBg = opt.style.backgroundColor;
+        const oldBorder = opt.style.border;
+        opt.style.backgroundColor = "rgba(0, 255, 0, 0.4)";
+        opt.style.border = "2px solid #0f0";
+        setTimeout(() => { 
+            opt.style.backgroundColor = oldBg; 
+            opt.style.border = oldBorder;
+        }, 3000);
         return;
       }
     }
+
     const short = na.substring(0, 15);
     for (const opt of options) {
       const ot = norm(opt.textContent);
       if (ot.startsWith(short) || short.startsWith(ot)) {
-        opt.classList.add('_rh');
-        setTimeout(() => { opt.classList.remove('_rh'); }, 2000);
+        const oldBg = opt.style.backgroundColor;
+        const oldBorder = opt.style.border;
+        opt.style.backgroundColor = "rgba(0, 255, 0, 0.4)";
+        opt.style.border = "2px solid #0f0";
+        setTimeout(() => { 
+            opt.style.backgroundColor = oldBg; 
+            opt.style.border = oldBorder;
+        }, 3000);
         return;
       }
     }
