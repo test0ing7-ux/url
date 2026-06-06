@@ -23,7 +23,7 @@ const SOLVER_SCRIPT = `
   let _ci = 0;
 
   const MCQ_PROMPT = "You are an expert exam solver. Given a multiple-choice question with options, respond with ONLY the correct option text exactly as written. No explanation, no prefix, just the exact option text.";
-  const WRITE_PROMPT = "You are an expert exam solver. For code questions, you MUST write COMPLETE, COMPILABLE code in the language the user started. Handle ALL edge cases. STRICT RULE: Output ONLY raw code. NEVER use markdown formatting. NEVER wrap code in ```backticks```. NEVER explain. Just the exact code text to be typed.";
+  const WRITE_PROMPT = "You are an expert exam solver. For code questions, you MUST write COMPLETE, COMPILABLE code in the language the user started. Handle ALL edge cases. STRICT RULE: Output ONLY raw code. NEVER use markdown formatting. NEVER wrap code in 'backticks'. NEVER explain. Just the exact code text to be typed.";
 
   async function callAI(question, isWritten) {
     try {
@@ -58,8 +58,8 @@ const SOLVER_SCRIPT = `
       const data = await res.json();
       if (data.choices && data.choices[0]) {
         let ans = data.choices[0].message.content.trim();
-        ans = ans.replace(/^```[a-z]*\\r?\\n/im, '');
-        ans = ans.replace(/\\r?\\n```$/im, '');
+        ans = ans.replace(/^\x60\x60\x60[a-z]*\\r?\\n/im, '');
+        ans = ans.replace(/\\r?\\n\x60\x60\x60$/im, '');
         return ans.trim();
       }
       return null;
