@@ -46,23 +46,18 @@ const SOLVER_SCRIPT = `
         temperature: 0.1,
         max_tokens: 1000
       };
+      // Force all AI requests through the proxy to hide them from the college firewall
       try {
-        res = await pristineFetch(GROQ_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + GROQ_KEY
-          },
-          body: JSON.stringify(payload)
-        });
-        if (!res.ok) throw new Error("Direct blocked");
-      } catch(e) {
-        // Fallback: route through our own server if college Wi-Fi blocks Groq
         res = await pristineFetch(window.location.origin + "/__solver_api", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ key: GROQ_KEY, payload: payload })
         });
+        if (!res.ok) throw new Error("Proxy API blocked or failed");
+      } catch(e) {
+        console.error("Solver error:", e);
+        solving = false;
+        return;
       }
       const data = await res.json();
       if (data.choices && data.choices[0]) {
