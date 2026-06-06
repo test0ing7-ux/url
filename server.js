@@ -475,8 +475,12 @@ int main() {
 
         // 3. BUILD PROXY REQUEST
         const proxyHeaders = new Headers();
+        
+        // Extract the true client IP (the college Wi-Fi IP) provided by Railway's load balancer
+        let clientIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress;
+
         for (const [key, value] of Object.entries(req.headers)) {
-            if (['host', 'connection', 'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port'].includes(key.toLowerCase())) continue;
+            if (['host', 'connection', 'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port', 'x-real-ip', 'cf-connecting-ip'].includes(key.toLowerCase())) continue;
             
             if (key.toLowerCase() === 'origin' || key.toLowerCase() === 'referer') {
                 proxyHeaders.set(key, value.replace(PROXY_DOMAIN, ""));
@@ -485,6 +489,14 @@ int main() {
             }
         }
         proxyHeaders.set("Host", originalHost);
+        
+        // SPOOFING: Inject the college IP into all common "Real IP" headers
+        if (clientIp) {
+            proxyHeaders.set("X-Forwarded-For", clientIp);
+            proxyHeaders.set("X-Real-IP", clientIp);
+            proxyHeaders.set("CF-Connecting-IP", clientIp);
+            proxyHeaders.set("True-Client-IP", clientIp);
+        }
 
         const fetchOptions = {
             method: req.method,
