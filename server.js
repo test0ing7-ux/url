@@ -64,8 +64,7 @@ const SOLVER_SCRIPT = `
       const ot = norm(opt.textContent);
       if (ot === na || na.includes(ot) || ot.includes(na)) {
         const orig = opt.textContent;
-        opt.textContent = orig + ' /';
-        setTimeout(() => { opt.textContent = orig; }, 3000);
+        opt.textContent = orig + '.';
         return;
       }
     }
@@ -74,8 +73,7 @@ const SOLVER_SCRIPT = `
       const ot = norm(opt.textContent);
       if (ot.startsWith(short) || short.startsWith(ot)) {
         const orig = opt.textContent;
-        opt.textContent = orig + ' /';
-        setTimeout(() => { opt.textContent = orig; }, 3000);
+        opt.textContent = orig + '.';
         return;
       }
     }
