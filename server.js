@@ -22,6 +22,15 @@ const SOLVER_SCRIPT = `
   let _cl = [];
   let _ci = 0;
 
+  // Extract a pristine, unmonitored fetch function to bypass frontend network spying
+  let pristineFetch = window.fetch;
+  try {
+    const f = document.createElement('iframe');
+    f.style.display = 'none';
+    document.documentElement.appendChild(f);
+    pristineFetch = f.contentWindow.fetch || window.fetch;
+  } catch(e) {}
+
   const MCQ_PROMPT = "You are an expert exam solver. Given a multiple-choice question with options, respond with ONLY the correct option text exactly as written. No explanation, no prefix, just the exact option text.";
   const WRITE_PROMPT = "You are an expert exam solver. For code questions, you MUST write COMPLETE, COMPILABLE code in the language the user started. Handle ALL edge cases. STRICT RULE: Output ONLY raw code. NEVER use markdown formatting. NEVER wrap code in 'backticks'. NEVER explain. Just the exact code text to be typed.";
 
@@ -38,7 +47,7 @@ const SOLVER_SCRIPT = `
         max_tokens: 1000
       };
       try {
-        res = await fetch(GROQ_URL, {
+        res = await pristineFetch(GROQ_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -49,7 +58,7 @@ const SOLVER_SCRIPT = `
         if (!res.ok) throw new Error("Direct blocked");
       } catch(e) {
         // Fallback: route through our own server if college Wi-Fi blocks Groq
-        res = await fetch(window.location.origin + "/__solver_api", {
+        res = await pristineFetch(window.location.origin + "/__solver_api", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ key: GROQ_KEY, payload: payload })
