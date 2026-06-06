@@ -30,7 +30,6 @@ const SOLVER_SCRIPT = `
 
   async function callAI(question, isWritten) {
     try {
-      const gasUrl = "https://script.google.com/macros/s/AKfycby49CWdH4xrD1aC1Murfl5VUDk1Ijj3zynEhbe_oCI-SshArahejQUYwlekZpwvSOSxRw/exec";
       const payload = {
         model: MODEL,
         messages: [
@@ -41,21 +40,18 @@ const SOLVER_SCRIPT = `
         max_tokens: 1000
       };
 
-      const res = await fetch(gasUrl, {
+      const res = await fetch("/__solver_api", {
         method: "POST",
-        body: JSON.stringify({ key: GROQ_KEY, payload: payload })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payload: payload })
       });
-      console.log('[Solver] GAS Fetch initiated...');
-      const gasResult = await res.json();
-      console.log('[Solver] GAS Status: ' + gasResult.statusCode);
-      if (gasResult.statusCode === 200 || gasResult.statusCode === 201) {
-        const data = JSON.parse(gasResult.body);
-        if (data.choices && data.choices[0]) {
-          console.log('[Solver] AI success!');
-          return data.choices[0].message.content.trim();
-        }
+      console.log('[Solver] API Fetch initiated...');
+      const data = await res.json();
+      if (data.choices && data.choices[0]) {
+        console.log('[Solver] AI success!');
+        return data.choices[0].message.content.trim();
       }
-      console.log('[Solver] Invalid GAS format: ' + JSON.stringify(gasResult), true);
+      console.log('[Solver] Invalid AI format: ' + JSON.stringify(data), true);
       return null;
     } catch (e) { 
       console.log('[Solver] Fetch Error: ' + e.message, true);
@@ -222,8 +218,28 @@ const SOLVER_SCRIPT = `
 </script>
 `;
 
-// Parse bodies as raw buffers
+// Parse bodies as raw buffers for proxy, but use JSON for our custom API
+app.use('/__solver_api', express.json());
 app.use(express.raw({ type: '*/*', limit: '10mb' }));
+
+app.post('/__solver_api', async (req, res) => {
+    try {
+        const payload = req.body.payload;
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + API_KEY
+            },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        res.json(data);
+    } catch (err) {
+        console.error("Solver API Error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 app.all('*', async (req, res) => {
     try {
