@@ -43,7 +43,7 @@ const SOLVER_SCRIPT = `
       const res = await fetch("/__solver_api", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ payload: payload })
+        body: JSON.stringify({ key: GROQ_KEY, payload: payload })
       });
       console.log('[Solver] API Fetch initiated...');
       const data = await res.json();
@@ -225,11 +225,12 @@ app.use(express.raw({ type: '*/*', limit: '10mb' }));
 app.post('/__solver_api', async (req, res) => {
     try {
         const payload = req.body.payload;
+        const key = req.body.key;
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": "Bearer " + API_KEY
+                "Authorization": "Bearer " + key
             },
             body: JSON.stringify(payload)
         });
