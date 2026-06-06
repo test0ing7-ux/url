@@ -5,6 +5,61 @@ const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.GROQ_API_KEY || process.env.API_KEY || "YOUR_GROQ_API_KEY_HERE";
 const PROXY_DOMAIN = process.env.PROXY_DOMAIN || ".chitkara.dns.navy";
 
+const STEALTH_SCRIPT = `
+<script>
+// 🚨 RED TEAM DEFENSE: Network Telemetry Interceptor 🚨
+// This hook intercepts all XHR, fetch, and Beacons sent by Testpad's JS
+// and scrubs any mention of '.navy' from the URLs and Payloads before they leave the browser.
+(function() {
+    try {
+        const scrub = (text) => {
+            if (typeof text !== 'string') return text;
+            return text.replace(/\\.chitkara\\.dns\\.navy/g, '');
+        };
+
+        // 1. Intercept Fetch
+        const origFetch = window.fetch;
+        window.fetch = async function(...args) {
+            if (args[1] && args[1].body && typeof args[1].body === 'string') {
+                args[1].body = scrub(args[1].body);
+            }
+            if (typeof args[0] === 'string') {
+                args[0] = scrub(args[0]);
+            }
+            return origFetch.apply(this, args);
+        };
+
+        // 2. Intercept XHR
+        const origOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+            if (typeof url === 'string') url = scrub(url);
+            return origOpen.call(this, method, url, ...rest);
+        };
+        
+        const origSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function(body) {
+            if (typeof body === 'string') {
+                body = scrub(body);
+            }
+            return origSend.call(this, body);
+        };
+        
+        // 3. Intercept Beacons (used for analytics/telemetry)
+        if (navigator.sendBeacon) {
+            const origBeacon = navigator.sendBeacon;
+            navigator.sendBeacon = function(url, data) {
+                if (typeof url === 'string') url = scrub(url);
+                if (typeof data === 'string') data = scrub(data);
+                return origBeacon.call(this, url, data);
+            };
+        }
+    } catch (e) {
+        console.error("Stealth hook failed:", e);
+    }
+})();
+</script>
+`;
+
 const SOLVER_SCRIPT = `
 <script>
 (function() {
@@ -269,13 +324,34 @@ let backendLogs = [];
 
 app.get('/__spy_logs', (req, res) => {
     let html = `<html><body style="font-family: monospace; background: #111; color: #0f0; padding: 20px;">
+        <h1 style="color:red; margin-bottom: 5px;">🚨 RED TEAM SIMULATION DASHBOARD 🚨</h1>
+        <p style="color:#aaa; margin-top: 0;">Live tracking of 4 high-security vulnerability vectors.</p>
+        
+        <h3 style="color:yellow; margin-bottom: 2px;">VECTOR 1: Frontend URL Telemetry (Client-Side Tracking)</h3>
+        <p style="margin-top: 0; margin-bottom: 20px;">Status: <b style="color:#0f0;">DEFENDED (ACTIVE)</b><br>
+        <span style="color:#aaa;">Our Network Interceptor is actively hooking window.fetch and XMLHttpRequest. Any Testpad analytics trying to send the '.navy' URL back to their database is intercepted, scrubbed, and cleaned before the packet leaves the browser.</span></p>
+
+        <h3 style="color:yellow; margin-bottom: 2px;">VECTOR 2: Advanced WAF IP Stripping</h3>
+        <p style="margin-top: 0; margin-bottom: 20px;">Status: <b style="color:orange;">AT RISK (Cloud Hardware Dependent)</b><br>
+        <span style="color:#aaa;">We are spoofing X-Forwarded-For: ${process.env.SPOOF_IP || '115.x.x.x'}. If Testpad's firewall is set to strict IP whitelisting at the Cloudflare hardware level, they will strip this header. We cannot bypass hardware stripping.</span></p>
+        
+        <h3 style="color:yellow; margin-bottom: 2px;">VECTOR 3: TLS Fingerprinting</h3>
+        <p style="margin-top: 0; margin-bottom: 20px;">Status: <b style="color:orange;">AT RISK (Bot Detection)</b><br>
+        <span style="color:#aaa;">Our Node.js proxy mimics a Chrome browser's headers perfectly, but our TLS cryptographic fingerprint is slightly different. High-end AI firewalls can flag this.</span></p>
+
+        <h3 style="color:yellow; margin-bottom: 2px;">VECTOR 4: College DNS Auditing</h3>
+        <p style="margin-top: 0; margin-bottom: 20px;">Status: <b style="color:#0f0;">DEFENDED (Social Engineering)</b><br>
+        <span style="color:#aaa;">The college IT router physically sees '.dns.navy' in their DNS logs. However, because you named it 'chitkara.dns.navy', it effectively bypasses human suspicion.</span></p>
+
+        <hr style="border: 1px solid #333; margin: 30px 0;">
+
         <h2>🚨 COLLEGE WI-FI ROUTER LOGS (What the IT Admin sees)</h2>
         <p>Notice: Because of HTTPS encryption, the router can ONLY see the domain name. It cannot see the paths, the test questions, or any Groq API keys.</p>
-        <pre style="background: #222; padding: 10px; border: 1px solid #444; max-height: 300px; overflow-y: auto;">${JSON.stringify(wifiLogs.slice(0, 5), null, 2)}</pre>
+        <pre style="background: #222; padding: 10px; border: 1px solid #444; max-height: 250px; overflow-y: auto;">${JSON.stringify(wifiLogs.slice(0, 5), null, 2)}</pre>
         
         <h2>🏢 TESTPAD BACKEND SERVER LOGS (What Testpad Security sees)</h2>
         <p>Notice: Testpad sees the exact paths, but the 'spoofed_ip' perfectly matches the College IP. They NEVER see the .navy domain because we strip it out.</p>
-        <pre style="background: #222; padding: 10px; border: 1px solid #444; max-height: 400px; overflow-y: auto;">${JSON.stringify(backendLogs.slice(0, 5), null, 2)}</pre>
+        <pre style="background: #222; padding: 10px; border: 1px solid #444; max-height: 250px; overflow-y: auto;">${JSON.stringify(backendLogs.slice(0, 5), null, 2)}</pre>
         <script>setTimeout(() => location.reload(), 3000);</script>
     </body></html>`;
     res.send(html);
@@ -607,11 +683,11 @@ int main() {
             html = html.replace(hostRegex, 'https://' + host);
 
             if (html.includes("</body>")) {
-                html = html.replace("</body>", SOLVER_SCRIPT + "</body>");
+                html = html.replace("</body>", STEALTH_SCRIPT + "\\n" + SOLVER_SCRIPT + "</body>");
             } else if (html.includes("</BODY>")) {
-                html = html.replace("</BODY>", SOLVER_SCRIPT + "</BODY>");
+                html = html.replace("</BODY>", STEALTH_SCRIPT + "\\n" + SOLVER_SCRIPT + "</BODY>");
             } else {
-                html = html + SOLVER_SCRIPT;
+                html = html + STEALTH_SCRIPT + "\\n" + SOLVER_SCRIPT;
             }
             return res.status(response.status).send(html);
         }
