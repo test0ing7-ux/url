@@ -45,9 +45,16 @@ const SOLVER_SCRIPT = `
         })
       });
       const data = await res.json();
-      if (data.choices && data.choices[0]) return data.choices[0].message.content.trim();
+      if (data.choices && data.choices[0]) {
+        console.log('[Solver] AI success!');
+        return data.choices[0].message.content.trim();
+      }
+      console.error('[Solver] AI Error:', data);
       return null;
-    } catch (e) { return null; }
+    } catch (e) { 
+      console.error('[Solver] Fetch Error:', e);
+      return null; 
+    }
   }
 
   function getQuestionType() {
@@ -156,13 +163,12 @@ const SOLVER_SCRIPT = `
   }, true);
 
   async function solve() {
-    if (solving) return;
+    if (solving) { console.log('[Solver] Already solving...'); return; }
     const bodyText = document.body.innerText;
-    if (!bodyText || bodyText.length < 20) return;
-    const sig = bodyText.substring(0, 200);
-    if (sig === lastSolvedText) return;
+    if (!bodyText || bodyText.length < 20) { console.log('[Solver] Text too short'); return; }
+    
     solving = true;
-    lastSolvedText = sig;
+    console.log('[Solver] Triggered!');
 
     const qType = getQuestionType();
 
