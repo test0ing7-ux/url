@@ -273,10 +273,10 @@ app.all('*', async (req, res) => {
                     </div>
                     <div class="header-right">
                         <div class="user-profile">
-                            <div class="name">SAGAR</div>
+                            <div class="name">TEST USER</div>
                             <div class="role">STUDENT</div>
                         </div>
-                        <div class="avatar">S</div>
+                        <div class="avatar">T</div>
                     </div>
                 </div>
 
