@@ -280,6 +280,10 @@ app.all('*', async (req, res) => {
         const host = req.headers.host || '';
         const fullUrl = new URL(req.originalUrl || req.url, protocol + '://' + host);
 
+        // Extract the true client IP (or use a hardcoded spoof IP if we set one)
+        const HARDCODED_SPOOF_IP = process.env.SPOOF_IP || null;
+        let clientIp = HARDCODED_SPOOF_IP || (req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress);
+
         // 1. MOCK TESTPAD SECURITY VALIDATION
         if (fullUrl.searchParams.get("json") === "1") {
             res.setHeader("Content-Type", "application/json");
@@ -292,13 +296,11 @@ app.all('*', async (req, res) => {
             // Simulated Testpad IP Whitelist
             const REQUIRED_IP = process.env.WHITELIST_IP || "1.2.3.4"; // Change this to college IP later
             
-            // In a real load-balanced environment, Testpad checks x-forwarded-for
-            const testpadSeenIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress;
-            
-            if (process.env.WHITELIST_IP && testpadSeenIp !== REQUIRED_IP) {
+            // The mock test now checks the SPOOFED IP, just like the real Testpad would check the spoofed headers
+            if (process.env.WHITELIST_IP && clientIp !== REQUIRED_IP) {
                 return res.status(403).send(`
                     <h1 style="color:red; text-align:center; margin-top:50px;">403 FORBIDDEN - IP NOT ALLOWED</h1>
-                    <p style="text-align:center;">Testpad Security: Your IP (${testpadSeenIp}) is not on the college whitelist (${REQUIRED_IP}).</p>
+                    <p style="text-align:center;">Testpad Security: Your IP (${clientIp}) is not on the college whitelist (${REQUIRED_IP}).</p>
                 `);
             }
 
@@ -495,10 +497,6 @@ int main() {
         // 3. BUILD PROXY REQUEST
         const proxyHeaders = new Headers();
         
-        // Extract the true client IP (or use a hardcoded spoof IP if we set one)
-        const HARDCODED_SPOOF_IP = process.env.SPOOF_IP || null; // We will set this to the college IP later
-        let clientIp = HARDCODED_SPOOF_IP || (req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress);
-
         for (const [key, value] of Object.entries(req.headers)) {
             if (['host', 'connection', 'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port', 'x-real-ip', 'cf-connecting-ip'].includes(key.toLowerCase())) continue;
             
