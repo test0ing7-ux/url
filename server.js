@@ -138,15 +138,16 @@ app.all('*', async (req, res) => {
         }
 
         // 2. EXTRACT ORIGINAL HOST
-        if (!host.endsWith(PROXY_DOMAIN)) {
-            // For testing locally or via direct Railway URL
-            if (host.includes('localhost') || host.includes('127.0.0.1') || host.includes('railway.app') || host.includes('up.railway.app')) {
-                return res.status(400).send("Please use the " + PROXY_DOMAIN + " domain to access this proxy.");
-            }
+        let originalHost = "";
+        if (!host.endsWith(PROXY_DOMAIN) && !host.includes('localhost') && !host.includes('127.0.0.1')) {
             return res.status(400).send("Invalid proxy domain mapping. Hostname must end with " + PROXY_DOMAIN);
         }
 
-        const originalHost = host.slice(0, -PROXY_DOMAIN.length);
+        if (host.includes('localhost') || host.includes('127.0.0.1')) {
+            originalHost = "exam.testpad.chitkarauniversity.edu.in";
+        } else {
+            originalHost = host.slice(0, -PROXY_DOMAIN.length);
+        }
         if (!originalHost) {
             return res.status(400).send("Missing original domain.");
         }
