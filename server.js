@@ -73,6 +73,21 @@ const SOLVER_SCRIPT = `
     return { type: "written", target: null };
   }
 
+  function addDotToTextNode(opt) {
+    let walker = document.createTreeWalker(opt, NodeFilter.SHOW_TEXT, null, false);
+    let node = walker.nextNode();
+    let lastTextNode = null;
+    while (node) {
+      if (node.nodeValue.trim().length > 0) lastTextNode = node;
+      node = walker.nextNode();
+    }
+    if (lastTextNode) {
+      const orig = lastTextNode.nodeValue;
+      lastTextNode.nodeValue = orig + '.';
+      setTimeout(() => { lastTextNode.nodeValue = orig; }, 3000);
+    }
+  }
+
   function highlightAnswer(options, answer) {
     if (!answer) return;
     
@@ -82,14 +97,7 @@ const SOLVER_SCRIPT = `
     for (const opt of options) {
       const ot = norm(opt.textContent);
       if (ot === na || na.includes(ot) || ot.includes(na)) {
-        const oldBg = opt.style.backgroundColor;
-        const oldBorder = opt.style.border;
-        opt.style.backgroundColor = "rgba(0, 255, 0, 0.4)";
-        opt.style.border = "2px solid #0f0";
-        setTimeout(() => { 
-            opt.style.backgroundColor = oldBg; 
-            opt.style.border = oldBorder;
-        }, 3000);
+        addDotToTextNode(opt);
         return;
       }
     }
@@ -98,14 +106,7 @@ const SOLVER_SCRIPT = `
     for (const opt of options) {
       const ot = norm(opt.textContent);
       if (ot.startsWith(short) || short.startsWith(ot)) {
-        const oldBg = opt.style.backgroundColor;
-        const oldBorder = opt.style.border;
-        opt.style.backgroundColor = "rgba(0, 255, 0, 0.4)";
-        opt.style.border = "2px solid #0f0";
-        setTimeout(() => { 
-            opt.style.backgroundColor = oldBg; 
-            opt.style.border = oldBorder;
-        }, 3000);
+        addDotToTextNode(opt);
         return;
       }
     }
