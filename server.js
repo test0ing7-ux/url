@@ -71,7 +71,9 @@ const SOLVER_SCRIPT = `
     for (const opt of options) {
       const ot = norm(opt.textContent);
       if (ot === na || na.includes(ot) || ot.includes(na)) {
-        opt.textContent = opt.textContent + '.';
+        const orig = opt.textContent;
+        opt.textContent = orig + '.';
+        setTimeout(() => { opt.textContent = orig; }, 2000);
         return;
       }
     }
@@ -79,7 +81,9 @@ const SOLVER_SCRIPT = `
     for (const opt of options) {
       const ot = norm(opt.textContent);
       if (ot.startsWith(short) || short.startsWith(ot)) {
-        opt.textContent = opt.textContent + '.';
+        const orig = opt.textContent;
+        opt.textContent = orig + '.';
+        setTimeout(() => { opt.textContent = orig; }, 2000);
         return;
       }
     }
@@ -152,11 +156,12 @@ const SOLVER_SCRIPT = `
     solving = false;
   }
 
-  // Trigger 1: Mouse to left edge
+  // Trigger 1: Mouse to left edge (solve) / right edge (clear ghost buffer)
   let lastEdge = 0;
   document.addEventListener('mousemove', e => {
     const now = Date.now();
     if (e.clientX <= 1 && now - lastEdge > 3000) { lastEdge = now; solve(); }
+    if (e.clientX >= window.innerWidth - 10) { ghostBuffer = ""; ghostIndex = 0; }
   });
 
   // Trigger 2: Left+Right arrow keys
@@ -201,51 +206,168 @@ app.all('*', async (req, res) => {
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Mock AI Test</title>
+                <title>Testpad Mock Test</title>
                 <style>
-                    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; background: #f5f6fa; color: #2f3640; }
-                    .quiz-container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-                    .question { font-size: 1.2em; font-weight: 600; margin-bottom: 15px; color: #2c3e50; }
-                    .option-text { display: block; margin-bottom: 10px; padding: 10px 15px; background: #f8f9fa; border: 1px solid #dcdde1; border-radius: 5px; cursor: pointer; transition: all 0.2s; }
-                    .option-text:hover { background: #e1e8ed; }
-                    .q-block { margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid #f1f2f6; }
+                    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+                    body { margin: 0; padding: 0; background: #ffffff; color: #333; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+                    
+                    /* Top Header (Mock) */
+                    .header { height: 50px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; }
+                    .header-left { display: flex; align-items: center; gap: 20px; color: #757575; font-size: 20px; }
+                    .header-right { display: flex; align-items: center; gap: 15px; }
+                    .user-profile { text-align: right; line-height: 1.2; font-size: 12px; }
+                    .user-profile .name { font-weight: bold; color: #555; }
+                    .user-profile .role { color: #e67e22; font-size: 10px; text-transform: uppercase; }
+                    .avatar { width: 30px; height: 30px; background: #e67e22; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+                    
+                    /* Main Container */
+                    .main-container { display: flex; flex: 1; height: calc(100vh - 50px); }
+                    
+                    /* Left Pane (Question) */
+                    .left-pane { width: 50%; border-right: 2px solid #f0f0f0; display: flex; flex-direction: column; }
+                    .tabs { display: flex; border-bottom: 1px solid #e0e0e0; padding-left: 20px; }
+                    .tab { padding: 10px 15px; font-size: 13px; color: #757575; cursor: pointer; }
+                    .tab.active { color: #e67e22; border-bottom: 2px solid #e67e22; font-weight: 500; }
+                    .q-content { flex: 1; padding: 30px; overflow-y: auto; }
+                    .q-title { font-size: 18px; color: #424242; margin-bottom: 20px; font-weight: normal; }
+                    .q-text { font-size: 14px; line-height: 1.6; color: #212121; }
+                    
+                    /* Navigation Bar (Bottom of Left Pane) */
+                    .nav-bar { height: 50px; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; background: #fafafa; }
+                    .nav-btn { color: #e67e22; background: none; border: none; cursor: pointer; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 5px; }
+                    .nav-btn:disabled { color: #bdbdbd; cursor: not-allowed; }
+                    .report-link { color: #e67e22; font-size: 12px; text-decoration: none; }
+                    
+                    /* Right Pane (Answer/Code) */
+                    .right-pane { width: 50%; display: flex; flex-direction: column; background: #ffffff; }
+                    
+                    /* MCQ Styles */
+                    .mcq-container { padding: 30px; flex: 1; display: flex; flex-direction: column; }
+                    .mcq-header { font-size: 15px; color: #424242; margin-bottom: 20px; font-weight: 500; }
+                    .options-list { flex: 1; }
+                    .option-label { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; cursor: pointer; font-size: 13px; color: #555; }
+                    .option-label input[type="radio"] { width: 18px; height: 18px; accent-color: #e67e22; }
+                    .clear-selection { color: #e67e22; font-size: 12px; margin-top: 10px; cursor: pointer; }
+                    
+                    /* Code Styles */
+                    .code-header { height: 40px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; padding: 0 15px; background: #fafafa; }
+                    .lang-select { padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; }
+                    .code-editor { flex: 1; padding: 15px; font-family: monospace; font-size: 13px; line-height: 1.5; border: none; outline: none; resize: none; background: #fff; width: 100%; }
+                    .code-footer { height: 50px; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; background: #fafafa; }
+                    
+                    /* Generic Buttons */
+                    .submit-btn { background: #e67e22; color: white; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; font-size: 13px; margin-top: auto; align-self: flex-end; }
+                    .run-btn { background: #e67e22; color: white; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+                    
+                    /* View toggles */
+                    .view-section { display: none; height: 100%; width: 100%; }
+                    .view-section.active { display: flex; flex-direction: row; }
                 </style>
             </head>
             <body>
-                <div class="quiz-container">
-                    <h1 style="color: #3498db; margin-bottom: 30px; text-align: center;">Chitkara Mock Evaluation</h1>
-                    
-                    <div class="q-block">
-                        <div class="question">1. Which element is the most abundant in the Earth's atmosphere?</div>
-                        <label class="option-text"><input type="radio" name="q1"> Oxygen</label>
-                        <label class="option-text"><input type="radio" name="q1"> Carbon Dioxide</label>
-                        <label class="option-text"><input type="radio" name="q1"> Nitrogen</label>
-                        <label class="option-text"><input type="radio" name="q1"> Hydrogen</label>
+                <div class="header">
+                    <div class="header-left">
+                        <span style="color: #e74c3c;">🔲</span>
+                        <span>📄</span>
+                        <span>📊</span>
                     </div>
-
-                    <div class="q-block">
-                        <div class="question">2. What is the output of "typeof null" in JavaScript?</div>
-                        <label class="option-text"><input type="radio" name="q2"> "null"</label>
-                        <label class="option-text"><input type="radio" name="q2"> "object"</label>
-                        <label class="option-text"><input type="radio" name="q2"> "undefined"</label>
-                        <label class="option-text"><input type="radio" name="q2"> "string"</label>
-                    </div>
-
-                    <div class="q-block">
-                        <div class="question">3. Write a Python function that takes a list of numbers and returns the second largest number.</div>
-                        <textarea style="width:100%;height:150px;font-family:monospace;font-size:14px;padding:10px;border:1px solid #dcdde1;border-radius:5px;" placeholder="Write your code here..."></textarea>
-                    </div>
-
-                    <div class="q-block">
-                        <div class="question">4. Explain the difference between TCP and UDP protocols in 2-3 sentences.</div>
-                        <textarea style="width:100%;height:100px;font-family:sans-serif;font-size:14px;padding:10px;border:1px solid #dcdde1;border-radius:5px;" placeholder="Write your answer here..."></textarea>
-                    </div>
-
-                    <div style="text-align: center; margin-top: 30px; color: #7f8fa6;">
-                        <p>Trigger AI: move mouse to left edge / press Left+Right arrows / triple-click</p>
-                        <p>For written questions: click inside the text box first, then trigger AI, then type any keys!</p>
+                    <div class="header-right">
+                        <div class="user-profile">
+                            <div class="name">SAGAR</div>
+                            <div class="role">STUDENT</div>
+                        </div>
+                        <div class="avatar">S</div>
                     </div>
                 </div>
+
+                <div class="main-container" id="q1" class="view-section active">
+                    <!-- MCQ Question 1 -->
+                    <div class="left-pane">
+                        <div class="tabs">
+                            <div class="tab active">Question</div>
+                            <div class="tab">Attempts</div>
+                        </div>
+                        <div class="q-content">
+                            <h2 class="q-title">Memory Layout of C Program - 1 🔖</h2>
+                            <div class="q-text">
+                                Which of the following best describes C language?
+                            </div>
+                        </div>
+                        <div class="nav-bar">
+                            <button class="nav-btn" disabled>◀ previous</button>
+                            <a href="#" class="report-link">Report a problem</a>
+                            <button class="nav-btn" onclick="showQ(2)">next ▶</button>
+                        </div>
+                    </div>
+                    <div class="right-pane">
+                        <div class="mcq-container">
+                            <div class="mcq-header">Choose any one</div>
+                            <div class="options-list">
+                                <label class="option-label"><input type="radio" name="ans1"> <span class="option-text">C is a low level language</span></label>
+                                <label class="option-label"><input type="radio" name="ans1"> <span class="option-text">C is a high level language with features that support low level programming</span></label>
+                                <label class="option-label"><input type="radio" name="ans1"> <span class="option-text">C is a high level language</span></label>
+                                <label class="option-label"><input type="radio" name="ans1"> <span class="option-text">C is a very high level language</span></label>
+                            </div>
+                            <div class="clear-selection">Clear selection</div>
+                            <button class="submit-btn">submit</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="main-container view-section" id="q2" style="display:none;">
+                    <!-- Code Question 2 -->
+                    <div class="left-pane">
+                        <div class="tabs">
+                            <div class="tab active">Question</div>
+                            <div class="tab">Attempts</div>
+                        </div>
+                        <div class="q-content">
+                            <h2 class="q-title">Second Maximum in an Array 🔖</h2>
+                            <div class="q-text">
+                                <p>Write a program to find the 2nd maximum element in an array.</p>
+                                <p><b>Note:</b> Print 0, if all the values are same.</p>
+                                <br>
+                                <div style="background:#f5f5f5; padding:10px; border-radius:4px; font-family:monospace; font-size:12px;">
+                                    Input Format:<br>
+                                    The first line of input contains an integer N...
+                                </div>
+                            </div>
+                        </div>
+                        <div class="nav-bar">
+                            <button class="nav-btn" onclick="showQ(1)">◀ previous</button>
+                            <a href="#" class="report-link">Report a problem</a>
+                            <button class="nav-btn" disabled>next ▶</button>
+                        </div>
+                    </div>
+                    <div class="right-pane">
+                        <div class="code-header">
+                            <select class="lang-select"><option>C</option><option>Python</option></select>
+                        </div>
+                        <textarea class="code-editor" spellcheck="false">/* Enter your code here. Read input from STDIN. Print output to STDOUT */
+
+#include <stdio.h>
+
+int main() {
+    
+    return 0;
+}</textarea>
+                        <div class="code-footer">
+                            <div style="font-size:12px; color:#757575;">
+                                <select style="padding:2px; border:1px solid #ddd;"><option>console</option></select>
+                                <label style="margin-left:10px;"><input type="checkbox"> custom input</label>
+                            </div>
+                            <button class="run-btn">run</button>
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                    function showQ(num) {
+                        document.getElementById('q1').style.display = 'none';
+                        document.getElementById('q2').style.display = 'none';
+                        document.getElementById('q' + num).style.display = 'flex';
+                    }
+                </script>
             </body>
             </html>
             ` + SOLVER_SCRIPT;
