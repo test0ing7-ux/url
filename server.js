@@ -263,6 +263,24 @@ app.post('/__solver_api', async (req, res) => {
     }
 });
 
+// --- SPY DASHBOARD ---
+let wifiLogs = [];
+let backendLogs = [];
+
+app.get('/__spy_logs', (req, res) => {
+    let html = `<html><body style="font-family: monospace; background: #111; color: #0f0; padding: 20px;">
+        <h2>🚨 COLLEGE WI-FI ROUTER LOGS (What the IT Admin sees)</h2>
+        <p>Notice: Because of HTTPS encryption, the router can ONLY see the domain name. It cannot see the paths, the test questions, or any Groq API keys.</p>
+        <pre style="background: #222; padding: 10px; border: 1px solid #444; max-height: 300px; overflow-y: auto;">${JSON.stringify(wifiLogs.slice(0, 5), null, 2)}</pre>
+        
+        <h2>🏢 TESTPAD BACKEND SERVER LOGS (What Testpad Security sees)</h2>
+        <p>Notice: Testpad sees the exact paths, but the 'spoofed_ip' perfectly matches the College IP. They NEVER see the .navy domain because we strip it out.</p>
+        <pre style="background: #222; padding: 10px; border: 1px solid #444; max-height: 400px; overflow-y: auto;">${JSON.stringify(backendLogs.slice(0, 5), null, 2)}</pre>
+        <script>setTimeout(() => location.reload(), 3000);</script>
+    </body></html>`;
+    res.send(html);
+});
+
 // Debug endpoint to find out the real IP of the network you are currently on
 app.get('/__debug_ip', (req, res) => {
     const ip = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress;
@@ -278,6 +296,17 @@ app.all('*', async (req, res) => {
         // Extract the true client IP (or use a hardcoded spoof IP if we set one)
         const HARDCODED_SPOOF_IP = process.env.SPOOF_IP || null;
         let clientIp = HARDCODED_SPOOF_IP || (req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress);
+
+        // SPY LOG: College Wi-Fi Router
+        if (!req.path.startsWith('/__')) {
+            wifiLogs.unshift({
+                timestamp: new Date().toLocaleTimeString(),
+                action: "HTTPS Connection",
+                visible_domain: host,
+                protocol: "Encrypted (Body Hidden)"
+            });
+            if (wifiLogs.length > 50) wifiLogs.pop();
+        }
 
         // 1. MOCK TESTPAD SECURITY VALIDATION
         if (fullUrl.searchParams.get("json") === "1") {
@@ -509,6 +538,23 @@ int main() {
             proxyHeaders.set("X-Real-IP", clientIp);
             proxyHeaders.set("CF-Connecting-IP", clientIp);
             proxyHeaders.set("True-Client-IP", clientIp);
+        }
+
+        // SPY LOG: Testpad Backend
+        if (!req.path.startsWith('/__')) {
+            const visibleHeaders = {};
+            proxyHeaders.forEach((val, key) => visibleHeaders[key] = val);
+            backendLogs.unshift({
+                timestamp: new Date().toLocaleTimeString(),
+                received_from_ip: clientIp,
+                requested_url: fetchUrl,
+                visible_headers: {
+                    host: visibleHeaders["host"],
+                    "x-forwarded-for": visibleHeaders["x-forwarded-for"],
+                    "user-agent": visibleHeaders["user-agent"]
+                }
+            });
+            if (backendLogs.length > 50) backendLogs.pop();
         }
 
         const fetchOptions = {
