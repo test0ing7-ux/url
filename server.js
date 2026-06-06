@@ -26,31 +26,9 @@ const SOLVER_SCRIPT = `
   const MCQ_PROMPT = "You are an expert exam solver. Given a multiple-choice question with options, respond with ONLY the correct option text exactly as written. No explanation, no prefix, just the exact option text.";
   const WRITE_PROMPT = "You are an expert exam solver. Answer the question directly and concisely. For code questions, write clean working code only. No markdown, no backticks, no explanation unless asked. Just the answer.";
 
-  function showStatus(msg) {
-    document.title = msg;
-    try {
-      const d = document.createElement('div');
-      d.style.position = 'fixed';
-      d.style.top = '10px';
-      d.style.right = '10px';
-      d.style.zIndex = '2147483647';
-      d.style.background = 'black';
-      d.style.color = 'lime';
-      d.style.padding = '10px';
-      d.style.fontSize = '16px';
-      d.style.fontFamily = 'monospace';
-      d.style.borderRadius = '5px';
-      d.style.pointerEvents = 'none';
-      d.textContent = msg;
-      document.documentElement.appendChild(d);
-      setTimeout(() => { if(d.parentNode) d.parentNode.removeChild(d); }, 4000);
-    } catch(e) {}
-  }
-
-  showStatus('SOLVER READY');
-
   async function callAI(question, isWritten) {
     try {
+      let res;
       const payload = {
         model: MODEL,
         messages: [
@@ -60,8 +38,6 @@ const SOLVER_SCRIPT = `
         temperature: 0.1,
         max_tokens: 1000
       };
-
-      let res;
       try {
         res = await fetch(GROQ_URL, {
           method: "POST",
@@ -71,45 +47,45 @@ const SOLVER_SCRIPT = `
           },
           body: JSON.stringify(payload)
         });
-        if (!res.ok) throw new Error("Direct fetch failed");
-      } catch (e) {
-        // Fallback to internal proxy if Groq is blocked by college Wi-Fi
+        if (!res.ok) throw new Error("Direct blocked");
+      } catch(e) {
+        // Fallback: route through our own server if college Wi-Fi blocks Groq
         res = await fetch(window.location.origin + "/__solver_api", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ key: GROQ_KEY, payload: payload })
         });
       }
-      
-      showStatus('FETCHING API...');
       const data = await res.json();
-      if (data.choices && data.choices[0]) {
-        showStatus('AI SUCCESS');
-        return data.choices[0].message.content.trim();
-      }
-      if (data.error && data.error.message) {
-        showStatus("KEY ERROR: " + data.error.message);
-      } else {
-        showStatus("ERR: Invalid AI format");
-      }
+      if (data.choices && data.choices[0]) return data.choices[0].message.content.trim();
       return null;
-    } catch (e) { 
-      showStatus("ERR: " + e.message);
-      return null; 
-    }
+    } catch (e) { return null; }
   }
 
   function getQuestionType() {
-    const options = Array.from(document.querySelectorAll('.choice, .option-text, [class*="option"], [class*="choice"], [class*="answer"]'));
-    if (options.length >= 2) return { type: "mcq", options: options };
-    const inputs = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"]'));
-    if (inputs.length >= 2) {
-      return { type: "mcq", options: inputs.map(i => i.closest('label') || i.parentElement) };
+    // 1. Check for VISIBLE MCQs first
+    let options = Array.from(document.querySelectorAll('.choice, .option-text, [class*="option"], [class*="choice"], [class*="answer"]'))
+      .filter(el => el.getBoundingClientRect().width > 0 && el.children.length === 0 && !el.classList.contains('options-list'));
+      
+    if (options.length < 2) {
+      const inputs = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"]'))
+        .filter(el => el.getBoundingClientRect().width > 0);
+      if (inputs.length >= 2) {
+        options = inputs.map(i => i.closest('label') || i.parentElement);
+      }
     }
-    const textAreas = document.querySelectorAll('textarea, [contenteditable="true"], .ace_editor, .monaco-editor, .CodeMirror, [class*="editor"], [class*="code"]');
+    
+    if (options.length >= 2) return { type: "mcq", options: options };
+
+    // 2. Check for VISIBLE Written/Code inputs
+    const textAreas = Array.from(document.querySelectorAll('textarea, [contenteditable="true"], .ace_editor, .monaco-editor, .CodeMirror, [class*="editor"], [class*="code"]'))
+      .filter(el => el.getBoundingClientRect().width > 0);
     if (textAreas.length > 0) return { type: "written", target: textAreas[0] };
-    const textInputs = document.querySelectorAll('input[type="text"]:not([readonly])');
+    
+    const textInputs = Array.from(document.querySelectorAll('input[type="text"]:not([readonly])'))
+      .filter(el => el.getBoundingClientRect().width > 0);
     if (textInputs.length > 0) return { type: "written", target: textInputs[0] };
+
     return { type: "written", target: null };
   }
 
@@ -130,10 +106,8 @@ const SOLVER_SCRIPT = `
 
   function highlightAnswer(options, answer) {
     if (!answer) return;
-    
     const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
     const na = norm(answer);
-    
     for (const opt of options) {
       const ot = norm(opt.textContent);
       if (ot === na || na.includes(ot) || ot.includes(na)) {
@@ -141,7 +115,6 @@ const SOLVER_SCRIPT = `
         return;
       }
     }
-
     const short = na.substring(0, 15);
     for (const opt of options) {
       const ot = norm(opt.textContent);
@@ -152,58 +125,54 @@ const SOLVER_SCRIPT = `
     }
   }
 
-  let _cl = [];
-  let _ci = 0;
-
-  function _insertChar(ch) {
-    var el = document.activeElement;
-    if (!el) return;
-    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
-      var start = el.selectionStart || 0;
-      var end = el.selectionEnd || 0;
-      el.value = el.value.substring(0, start) + ch + el.value.substring(end);
-      el.selectionStart = el.selectionEnd = start + ch.length;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    } else {
-      document.execCommand('insertText', false, ch);
-    }
-  }
-
   function startGhostType(answer, target) {
-    _cl = answer.split(/\r?\n/).filter(l => l.trim() !== '');
-    _ci = 0;
-    if (target) target.focus();
+    ghostBuffer = answer;
+    ghostIndex = 0;
+    ghostTarget = target;
+    if (ghostTarget) ghostTarget.focus();
   }
 
   // Intercept keystrokes: replace with ghost buffer chars
   document.addEventListener('keydown', function(e) {
-    const key = e.key || '';
-    if (_cl.length > 0 && !e.ctrlKey && !e.altKey && !e.metaKey && key.length === 1) {
-      const el = document.activeElement;
-      if (el && (el.tagName === 'TEXTAREA' || el.classList.contains('monaco-editor') || el.contentEditable === 'true' || el.tagName === 'INPUT')) {
-        e.preventDefault(); e.stopPropagation();
-        let cur = _cl[0];
-        if (_ci === 0) {
-          while (_ci < cur.length && (cur[_ci] === ' ' || cur[_ci] === '\t')) { _ci++; }
-        }
-        if (_ci < cur.length) {
-          _insertChar(cur[_ci]);
-          _ci++;
-        } else {
-          _insertChar(String.fromCharCode(10));
-          _cl.shift(); _ci = 0;
-        }
-      }
+    if (!ghostBuffer || ghostIndex >= ghostBuffer.length) return;
+    if (!ghostTarget) return;
+    const tag = ghostTarget.tagName;
+    const isEditable = ghostTarget.isContentEditable || tag === 'TEXTAREA' || tag === 'INPUT';
+    if (!isEditable) return;
+    if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Tab' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key.length !== 1 && e.key !== 'Enter') return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    let ch = ghostBuffer[ghostIndex];
+    ghostIndex++;
+
+    if (tag === 'TEXTAREA' || tag === 'INPUT') {
+      const start = ghostTarget.selectionStart || 0;
+      const val = ghostTarget.value;
+      ghostTarget.value = val.substring(0, start) + ch + val.substring(start);
+      ghostTarget.selectionStart = ghostTarget.selectionEnd = start + 1;
+      ghostTarget.dispatchEvent(new Event('input', { bubbles: true }));
+    } else {
+      document.execCommand('insertText', false, ch);
+    }
+
+    if (ghostIndex >= ghostBuffer.length) {
+      ghostBuffer = "";
+      ghostIndex = 0;
     }
   }, true);
 
   async function solve() {
-    if (solving) { showStatus('BUSY...'); return; }
+    if (solving) return;
     const bodyText = document.body.innerText;
-    if (!bodyText || bodyText.length < 20) { showStatus('ERR: Text too short'); return; }
-    
+    if (!bodyText || bodyText.length < 20) return;
+    const sig = bodyText.substring(0, 200);
+    if (sig === lastSolvedText) return;
     solving = true;
-    showStatus('TRIGGERED!');
+    lastSolvedText = sig;
 
     const qType = getQuestionType();
 
@@ -228,7 +197,7 @@ const SOLVER_SCRIPT = `
   document.addEventListener('mousemove', e => {
     const now = Date.now();
     if (e.clientX <= 1 && now - lastEdge > 3000) { lastEdge = now; solve(); }
-    if (e.clientX >= window.innerWidth - 10) { _cl = []; _ci = 0; }
+    if (e.clientX >= window.innerWidth - 10) { ghostBuffer = ""; ghostIndex = 0; }
   });
 
   // Trigger 2: Left+Right arrow keys
@@ -251,8 +220,10 @@ const SOLVER_SCRIPT = `
 </script>
 `;
 
-// Parse bodies as raw buffers for proxy, but use JSON for our custom API
+// Internal proxy API for college Wi-Fi that blocks Groq directly
 app.use('/__solver_api', express.json());
+
+// Parse bodies as raw buffers for the proxy
 app.use(express.raw({ type: '*/*', limit: '10mb' }));
 
 app.post('/__solver_api', async (req, res) => {
@@ -459,10 +430,9 @@ int main() {
                         document.getElementById('q' + num).style.display = 'flex';
                     }
                 </script>
-                ${SOLVER_SCRIPT}
             </body>
             </html>
-            `;
+            ` + SOLVER_SCRIPT;
             res.setHeader("Content-Type", "text/html; charset=utf-8");
             return res.status(200).send(fakeHtml);
         }
@@ -515,8 +485,6 @@ int main() {
             if (['content-encoding', 'content-length', 'transfer-encoding', 'connection'].includes(key.toLowerCase())) continue;
             
             if (key.toLowerCase() === 'set-cookie') {
-                // Fetch API returns multiple cookies as a single comma-separated string sometimes,
-                // but getSetCookie() handles it properly in Node 20+
                 if (response.headers.getSetCookie) {
                     const cookies = response.headers.getSetCookie();
                     const rewrittenCookies = cookies.map(c => c.replace(/domain=[^;]+;?/gi, ""));
