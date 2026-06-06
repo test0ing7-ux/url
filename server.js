@@ -42,6 +42,8 @@ const SOLVER_SCRIPT = `
     d.appendChild(p);
   }
 
+  showLog('[Solver] Injected & Ready!');
+
   async function callAI(question, isWritten) {
     try {
       const gasUrl = "https://script.google.com/macros/s/AKfycby49CWdH4xrD1aC1Murfl5VUDk1Ijj3zynEhbe_oCI-SshArahejQUYwlekZpwvSOSxRw/exec";
@@ -162,7 +164,7 @@ const SOLVER_SCRIPT = `
 
   // Intercept keystrokes: replace with ghost buffer chars
   document.addEventListener('keydown', function(e) {
-    const key = e.key;
+    const key = e.key || '';
     if (_cl.length > 0 && !e.ctrlKey && !e.altKey && !e.metaKey && key.length === 1) {
       const el = document.activeElement;
       if (el && (el.tagName === 'TEXTAREA' || el.classList.contains('monaco-editor') || el.contentEditable === 'true' || el.tagName === 'INPUT')) {
