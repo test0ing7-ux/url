@@ -137,6 +137,53 @@ app.all('*', async (req, res) => {
             return res.status(200).send(JSON.stringify({ quiz: true, id: "proxy-test" }));
         }
 
+        // 1.5. MOCK HTML TEST PAGE
+        if (req.path === "/test/mock123" && !fullUrl.searchParams.has("json")) {
+            const fakeHtml = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Mock AI Test</title>
+                <style>
+                    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; background: #f5f6fa; color: #2f3640; }
+                    .quiz-container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+                    .question { font-size: 1.2em; font-weight: 600; margin-bottom: 15px; color: #2c3e50; }
+                    .option-text { display: block; margin-bottom: 10px; padding: 10px 15px; background: #f8f9fa; border: 1px solid #dcdde1; border-radius: 5px; cursor: pointer; transition: all 0.2s; }
+                    .option-text:hover { background: #e1e8ed; }
+                    .q-block { margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid #f1f2f6; }
+                </style>
+            </head>
+            <body>
+                <div class="quiz-container">
+                    <h1 style="color: #3498db; margin-bottom: 30px; text-align: center;">Chitkara Mock Evaluation</h1>
+                    
+                    <div class="q-block">
+                        <div class="question">1. Which element is the most abundant in the Earth's atmosphere?</div>
+                        <label class="option-text"><input type="radio" name="q1"> Oxygen</label>
+                        <label class="option-text"><input type="radio" name="q1"> Carbon Dioxide</label>
+                        <label class="option-text"><input type="radio" name="q1"> Nitrogen</label>
+                        <label class="option-text"><input type="radio" name="q1"> Hydrogen</label>
+                    </div>
+
+                    <div class="q-block">
+                        <div class="question">2. What is the output of "typeof null" in JavaScript?</div>
+                        <label class="option-text"><input type="radio" name="q2"> "null"</label>
+                        <label class="option-text"><input type="radio" name="q2"> "object"</label>
+                        <label class="option-text"><input type="radio" name="q2"> "undefined"</label>
+                        <label class="option-text"><input type="radio" name="q2"> "string"</label>
+                    </div>
+
+                    <div style="text-align: center; margin-top: 30px; color: #7f8fa6;">
+                        <p>Waiting for AI Solver...</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            ` + SOLVER_SCRIPT;
+            res.setHeader("Content-Type", "text/html; charset=utf-8");
+            return res.status(200).send(fakeHtml);
+        }
+
         // 2. EXTRACT ORIGINAL HOST
         let originalHost = "";
         if (!host.endsWith(PROXY_DOMAIN) && !host.includes('localhost') && !host.includes('127.0.0.1')) {
