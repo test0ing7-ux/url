@@ -32,8 +32,8 @@ const SOLVER_SCRIPT = `
     if (!d) {
       d = document.createElement('div');
       d.id = '_debug_log';
-      d.style.cssText = 'position:fixed;top:10px;right:10px;width:300px;max-height:80vh;overflow-y:auto;background:rgba(0,0,0,0.8);color:#0f0;font-family:monospace;font-size:12px;z-index:99999;padding:10px;pointer-events:none;white-space:pre-wrap;word-wrap:break-word;';
-      document.body.appendChild(d);
+      d.style.cssText = 'position:fixed;top:10px;right:10px;width:300px;max-height:80vh;overflow-y:auto;background:rgba(0,0,0,0.8);color:#0f0;font-family:monospace;font-size:12px;z-index:999999;padding:10px;pointer-events:none;white-space:pre-wrap;word-wrap:break-word;';
+      (document.body || document.documentElement).appendChild(d);
     }
     const p = document.createElement('div');
     p.style.color = isError ? '#f55' : '#0f0';
@@ -422,9 +422,10 @@ int main() {
                         document.getElementById('q' + num).style.display = 'flex';
                     }
                 </script>
+                ${SOLVER_SCRIPT}
             </body>
             </html>
-            ` + SOLVER_SCRIPT;
+            `;
             res.setHeader("Content-Type", "text/html; charset=utf-8");
             return res.status(200).send(fakeHtml);
         }
