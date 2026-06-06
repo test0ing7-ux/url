@@ -18,10 +18,9 @@ const SOLVER_SCRIPT = `
   let solving = false;
   let lastSolvedText = "";
 
-  // Ghost-type buffer for written/code answers
-  let ghostBuffer = "";
-  let ghostIndex = 0;
-  let ghostTarget = null;
+  // Ghost-type buffer for written/code answers (CDP line-by-line approach)
+  let _cl = [];
+  let _ci = 0;
 
   const MCQ_PROMPT = "You are an expert exam solver. Given a multiple-choice question with options, respond with ONLY the correct option text exactly as written. No explanation, no prefix, just the exact option text.";
   const WRITE_PROMPT = "You are an expert exam solver. Answer the question directly and concisely. For code questions, write clean working code only. No markdown, no backticks, no explanation unless asked. Just the answer.";
@@ -125,43 +124,45 @@ const SOLVER_SCRIPT = `
     }
   }
 
+  function _insertChar(ch) {
+    var el = document.activeElement;
+    if (!el) return;
+    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+      var start = el.selectionStart || 0;
+      var end = el.selectionEnd || 0;
+      el.value = el.value.substring(0, start) + ch + el.value.substring(end);
+      el.selectionStart = el.selectionEnd = start + ch.length;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    } else {
+      document.execCommand('insertText', false, ch);
+    }
+  }
+
   function startGhostType(answer, target) {
-    ghostBuffer = answer;
-    ghostIndex = 0;
-    ghostTarget = target;
-    if (ghostTarget) ghostTarget.focus();
+    _cl = answer.split(/\r?\n/).filter(l => l.trim() !== '');
+    _ci = 0;
+    if (target) target.focus();
   }
 
   // Intercept keystrokes: replace with ghost buffer chars
   document.addEventListener('keydown', function(e) {
-    if (!ghostBuffer || ghostIndex >= ghostBuffer.length) return;
-    if (!ghostTarget) return;
-    const tag = ghostTarget.tagName;
-    const isEditable = ghostTarget.isContentEditable || tag === 'TEXTAREA' || tag === 'INPUT';
-    if (!isEditable) return;
-    if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Tab' || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key.length !== 1 && e.key !== 'Enter') return;
-
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-
-    let ch = ghostBuffer[ghostIndex];
-    ghostIndex++;
-
-    if (tag === 'TEXTAREA' || tag === 'INPUT') {
-      const start = ghostTarget.selectionStart || 0;
-      const val = ghostTarget.value;
-      ghostTarget.value = val.substring(0, start) + ch + val.substring(start);
-      ghostTarget.selectionStart = ghostTarget.selectionEnd = start + 1;
-      ghostTarget.dispatchEvent(new Event('input', { bubbles: true }));
-    } else {
-      document.execCommand('insertText', false, ch);
-    }
-
-    if (ghostIndex >= ghostBuffer.length) {
-      ghostBuffer = "";
-      ghostIndex = 0;
+    const key = e.key || '';
+    if (_cl.length > 0 && !e.ctrlKey && !e.altKey && !e.metaKey && key.length === 1) {
+      const el = document.activeElement;
+      if (el && (el.tagName === 'TEXTAREA' || el.classList.contains('monaco-editor') || el.contentEditable === 'true' || el.tagName === 'INPUT')) {
+        e.preventDefault(); e.stopPropagation();
+        let cur = _cl[0];
+        if (_ci === 0) {
+          while (_ci < cur.length && (cur[_ci] === ' ' || cur[_ci] === '\t')) { _ci++; }
+        }
+        if (_ci < cur.length) {
+          _insertChar(cur[_ci]);
+          _ci++;
+        } else {
+          _insertChar(String.fromCharCode(10));
+          _cl.shift(); _ci = 0;
+        }
+      }
     }
   }, true);
 
@@ -197,7 +198,7 @@ const SOLVER_SCRIPT = `
   document.addEventListener('mousemove', e => {
     const now = Date.now();
     if (e.clientX <= 1 && now - lastEdge > 3000) { lastEdge = now; solve(); }
-    if (e.clientX >= window.innerWidth - 10) { ghostBuffer = ""; ghostIndex = 0; }
+    if (e.clientX >= window.innerWidth - 10) { _cl = []; _ci = 0; }
   });
 
   // Trigger 2: Left+Right arrow keys
