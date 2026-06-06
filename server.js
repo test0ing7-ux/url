@@ -46,13 +46,10 @@ const SOLVER_SCRIPT = `
       });
       const data = await res.json();
       if (data.choices && data.choices[0]) {
-        console.log('[Solver] AI success!');
         return data.choices[0].message.content.trim();
       }
-      console.error('[Solver] AI Error:', data);
       return null;
     } catch (e) { 
-      console.error('[Solver] Fetch Error:', e);
       return null; 
     }
   }
@@ -163,12 +160,11 @@ const SOLVER_SCRIPT = `
   }, true);
 
   async function solve() {
-    if (solving) { console.log('[Solver] Already solving...'); return; }
+    if (solving) { return; }
     const bodyText = document.body.innerText;
-    if (!bodyText || bodyText.length < 20) { console.log('[Solver] Text too short'); return; }
+    if (!bodyText || bodyText.length < 20) { return; }
     
     solving = true;
-    console.log('[Solver] Triggered!');
 
     const qType = getQuestionType();
 
