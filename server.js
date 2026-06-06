@@ -43,15 +43,20 @@ const SOLVER_SCRIPT = `
         method: "POST",
         body: JSON.stringify({ key: GROQ_KEY, payload: payload })
       });
+      console.log('[Solver] GAS Fetch initiated, awaiting response...');
       const gasResult = await res.json();
+      console.log('[Solver] GAS Raw Response:', gasResult);
       if (gasResult.statusCode === 200 || gasResult.statusCode === 201) {
         const data = JSON.parse(gasResult.body);
         if (data.choices && data.choices[0]) {
+          console.log('[Solver] AI success!');
           return data.choices[0].message.content.trim();
         }
       }
+      console.error('[Solver] Invalid GAS format or missing choices:', gasResult);
       return null;
     } catch (e) { 
+      console.error('[Solver] GAS Fetch Error:', e);
       return null; 
     }
   }
@@ -162,11 +167,12 @@ const SOLVER_SCRIPT = `
   }, true);
 
   async function solve() {
-    if (solving) { return; }
+    if (solving) { console.log('[Solver] Already solving...'); return; }
     const bodyText = document.body.innerText;
-    if (!bodyText || bodyText.length < 20) { return; }
+    if (!bodyText || bodyText.length < 20) { console.log('[Solver] Text too short'); return; }
     
     solving = true;
+    console.log('[Solver] Triggered!');
 
     const qType = getQuestionType();
 
