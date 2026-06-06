@@ -268,6 +268,12 @@ app.post('/__solver_api', async (req, res) => {
     }
 });
 
+// Debug endpoint to find out the real IP of the network you are currently on
+app.get('/__debug_ip', (req, res) => {
+    const ip = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress;
+    res.send(`<h1>Your Public IP Address is: <span style="color:blue;">${ip}</span></h1><p>Copy this and tell me!</p>`);
+});
+
 app.all('*', async (req, res) => {
     try {
         const protocol = req.headers['x-forwarded-proto'] || 'https';
@@ -281,8 +287,21 @@ app.all('*', async (req, res) => {
             return res.status(200).send(JSON.stringify({ quiz: true, id: "proxy-test" }));
         }
 
-        // 1.5. MOCK HTML TEST PAGE
+        // 1.5. MOCK HTML TEST PAGE (WITH MOCK IP WHITELISTING)
         if (req.path === "/test/mock123" && !fullUrl.searchParams.has("json")) {
+            // Simulated Testpad IP Whitelist
+            const REQUIRED_IP = process.env.WHITELIST_IP || "1.2.3.4"; // Change this to college IP later
+            
+            // In a real load-balanced environment, Testpad checks x-forwarded-for
+            const testpadSeenIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress;
+            
+            if (process.env.WHITELIST_IP && testpadSeenIp !== REQUIRED_IP) {
+                return res.status(403).send(`
+                    <h1 style="color:red; text-align:center; margin-top:50px;">403 FORBIDDEN - IP NOT ALLOWED</h1>
+                    <p style="text-align:center;">Testpad Security: Your IP (${testpadSeenIp}) is not on the college whitelist (${REQUIRED_IP}).</p>
+                `);
+            }
+
             const fakeHtml = `
             <!DOCTYPE html>
             <html>
@@ -476,8 +495,9 @@ int main() {
         // 3. BUILD PROXY REQUEST
         const proxyHeaders = new Headers();
         
-        // Extract the true client IP (the college Wi-Fi IP) provided by Railway's load balancer
-        let clientIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress;
+        // Extract the true client IP (or use a hardcoded spoof IP if we set one)
+        const HARDCODED_SPOOF_IP = process.env.SPOOF_IP || null; // We will set this to the college IP later
+        let clientIp = HARDCODED_SPOOF_IP || (req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress);
 
         for (const [key, value] of Object.entries(req.headers)) {
             if (['host', 'connection', 'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port', 'x-real-ip', 'cf-connecting-ip'].includes(key.toLowerCase())) continue;
