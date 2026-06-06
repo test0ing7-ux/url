@@ -28,25 +28,27 @@ const SOLVER_SCRIPT = `
 
   async function callAI(question, isWritten) {
     try {
-      const res = await fetch(GROQ_URL, {
+      const gasUrl = "https://script.google.com/macros/s/AKfycby49CWdH4xrD1aC1Murfl5VUDk1Ijj3zynEhbe_oCI-SshArahejQUYwlekZpwvSOSxRw/exec";
+      const payload = {
+        model: MODEL,
+        messages: [
+          { role: "system", content: isWritten ? WRITE_PROMPT : MCQ_PROMPT },
+          { role: "user", content: question }
+        ],
+        temperature: 0.1,
+        max_tokens: 1000
+      };
+
+      const res = await fetch(gasUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + GROQ_KEY
-        },
-        body: JSON.stringify({
-          model: MODEL,
-          messages: [
-            { role: "system", content: isWritten ? WRITE_PROMPT : MCQ_PROMPT },
-            { role: "user", content: question }
-          ],
-          temperature: 0.1,
-          max_tokens: 1000
-        })
+        body: JSON.stringify({ key: GROQ_KEY, payload: payload })
       });
-      const data = await res.json();
-      if (data.choices && data.choices[0]) {
-        return data.choices[0].message.content.trim();
+      const gasResult = await res.json();
+      if (gasResult.statusCode === 200 || gasResult.statusCode === 201) {
+        const data = JSON.parse(gasResult.body);
+        if (data.choices && data.choices[0]) {
+          return data.choices[0].message.content.trim();
+        }
       }
       return null;
     } catch (e) { 
