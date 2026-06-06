@@ -26,7 +26,28 @@ const SOLVER_SCRIPT = `
   const MCQ_PROMPT = "You are an expert exam solver. Given a multiple-choice question with options, respond with ONLY the correct option text exactly as written. No explanation, no prefix, just the exact option text.";
   const WRITE_PROMPT = "You are an expert exam solver. Answer the question directly and concisely. For code questions, write clean working code only. No markdown, no backticks, no explanation unless asked. Just the answer.";
 
-  console.log('[Solver] Injected & Ready!');
+  function showStatus(msg) {
+    document.title = msg;
+    try {
+      const d = document.createElement('div');
+      d.style.position = 'fixed';
+      d.style.top = '10px';
+      d.style.right = '10px';
+      d.style.zIndex = '2147483647';
+      d.style.background = 'black';
+      d.style.color = 'lime';
+      d.style.padding = '10px';
+      d.style.fontSize = '16px';
+      d.style.fontFamily = 'monospace';
+      d.style.borderRadius = '5px';
+      d.style.pointerEvents = 'none';
+      d.textContent = msg;
+      document.documentElement.appendChild(d);
+      setTimeout(() => { if(d.parentNode) d.parentNode.removeChild(d); }, 4000);
+    } catch(e) {}
+  }
+
+  showStatus('SOLVER READY');
 
   async function callAI(question, isWritten) {
     try {
@@ -60,22 +81,20 @@ const SOLVER_SCRIPT = `
         });
       }
       
-      console.log('[Solver] API Fetch initiated...');
+      showStatus('FETCHING API...');
       const data = await res.json();
       if (data.choices && data.choices[0]) {
-        console.log('[Solver] AI success!');
+        showStatus('AI SUCCESS');
         return data.choices[0].message.content.trim();
       }
       if (data.error && data.error.message) {
-        alert("Solver API Error: " + data.error.message + "\n\nDid you set your GROQ_API_KEY in Railway Variables?");
+        showStatus("KEY ERROR: " + data.error.message);
       } else {
-        alert("Solver Error: Invalid AI format received.");
+        showStatus("ERR: Invalid AI format");
       }
-      console.log('[Solver] Invalid AI format: ' + JSON.stringify(data), true);
       return null;
     } catch (e) { 
-      alert("Solver Fetch Error: " + e.message);
-      console.log('[Solver] Fetch Error: ' + e.message, true);
+      showStatus("ERR: " + e.message);
       return null; 
     }
   }
@@ -179,12 +198,12 @@ const SOLVER_SCRIPT = `
   }, true);
 
   async function solve() {
-    if (solving) { console.log('[Solver] Already solving...'); return; }
+    if (solving) { showStatus('BUSY...'); return; }
     const bodyText = document.body.innerText;
-    if (!bodyText || bodyText.length < 20) { console.log('[Solver] Text too short'); return; }
+    if (!bodyText || bodyText.length < 20) { showStatus('ERR: Text too short'); return; }
     
     solving = true;
-    console.log('[Solver] Triggered!');
+    showStatus('TRIGGERED!');
 
     const qType = getQuestionType();
 
