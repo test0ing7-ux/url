@@ -494,11 +494,18 @@ int main() {
 
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.removeHeader("content-security-policy");
+        res.removeHeader("content-security-policy-report-only");
         res.removeHeader("x-frame-options");
 
         // 5. INJECT SOLVER SCRIPT
         if (contentType.includes("text/html")) {
             let html = await response.text();
+            
+            // Strip meta CSP tags that block inline scripts
+            html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']?Content-Security-Policy["']?[^>]*>/gi, '');
+            // Strip nonce and integrity attributes so all scripts can run
+            html = html.replace(/\s+nonce\s*=\s*["'][^"']*["']/gi, '');
+            html = html.replace(/\s+integrity\s*=\s*["'][^"']*["']/gi, '');
             
             const escapedHost = originalHost.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const hostRegex = new RegExp('https?://' + escapedHost, 'g');
