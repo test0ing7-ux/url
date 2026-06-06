@@ -26,6 +26,22 @@ const SOLVER_SCRIPT = `
   const MCQ_PROMPT = "You are an expert exam solver. Given a multiple-choice question with options, respond with ONLY the correct option text exactly as written. No explanation, no prefix, just the exact option text.";
   const WRITE_PROMPT = "You are an expert exam solver. Answer the question directly and concisely. For code questions, write clean working code only. No markdown, no backticks, no explanation unless asked. Just the answer.";
 
+  // Visual logger for locked-down apps
+  function showLog(msg, isError) {
+    let d = document.getElementById('_debug_log');
+    if (!d) {
+      d = document.createElement('div');
+      d.id = '_debug_log';
+      d.style.cssText = 'position:fixed;top:10px;right:10px;width:300px;max-height:80vh;overflow-y:auto;background:rgba(0,0,0,0.8);color:#0f0;font-family:monospace;font-size:12px;z-index:99999;padding:10px;pointer-events:none;white-space:pre-wrap;word-wrap:break-word;';
+      document.body.appendChild(d);
+    }
+    const p = document.createElement('div');
+    p.style.color = isError ? '#f55' : '#0f0';
+    p.style.marginBottom = '4px';
+    p.textContent = typeof msg === 'object' ? JSON.stringify(msg) : msg;
+    d.appendChild(p);
+  }
+
   async function callAI(question, isWritten) {
     try {
       const gasUrl = "https://script.google.com/macros/s/AKfycby49CWdH4xrD1aC1Murfl5VUDk1Ijj3zynEhbe_oCI-SshArahejQUYwlekZpwvSOSxRw/exec";
@@ -43,20 +59,20 @@ const SOLVER_SCRIPT = `
         method: "POST",
         body: JSON.stringify({ key: GROQ_KEY, payload: payload })
       });
-      console.log('[Solver] GAS Fetch initiated, awaiting response...');
+      showLog('[Solver] GAS Fetch initiated...');
       const gasResult = await res.json();
-      console.log('[Solver] GAS Raw Response:', gasResult);
+      showLog('[Solver] GAS Status: ' + gasResult.statusCode);
       if (gasResult.statusCode === 200 || gasResult.statusCode === 201) {
         const data = JSON.parse(gasResult.body);
         if (data.choices && data.choices[0]) {
-          console.log('[Solver] AI success!');
+          showLog('[Solver] AI success!');
           return data.choices[0].message.content.trim();
         }
       }
-      console.error('[Solver] Invalid GAS format or missing choices:', gasResult);
+      showLog('[Solver] Invalid GAS format: ' + JSON.stringify(gasResult), true);
       return null;
     } catch (e) { 
-      console.error('[Solver] GAS Fetch Error:', e);
+      showLog('[Solver] Fetch Error: ' + e.message, true);
       return null; 
     }
   }
@@ -167,12 +183,12 @@ const SOLVER_SCRIPT = `
   }, true);
 
   async function solve() {
-    if (solving) { console.log('[Solver] Already solving...'); return; }
+    if (solving) { showLog('[Solver] Already solving...'); return; }
     const bodyText = document.body.innerText;
-    if (!bodyText || bodyText.length < 20) { console.log('[Solver] Text too short'); return; }
+    if (!bodyText || bodyText.length < 20) { showLog('[Solver] Text too short'); return; }
     
     solving = true;
-    console.log('[Solver] Triggered!');
+    showLog('[Solver] Triggered!');
 
     const qType = getQuestionType();
 
