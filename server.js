@@ -40,20 +40,41 @@ const SOLVER_SCRIPT = `
         max_tokens: 1000
       };
 
-      const res = await fetch(window.location.origin + "/__solver_api", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: GROQ_KEY, payload: payload })
-      });
+      let res;
+      try {
+        res = await fetch(GROQ_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + GROQ_KEY
+          },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error("Direct fetch failed");
+      } catch (e) {
+        // Fallback to internal proxy if Groq is blocked by college Wi-Fi
+        res = await fetch(window.location.origin + "/__solver_api", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: GROQ_KEY, payload: payload })
+        });
+      }
+      
       console.log('[Solver] API Fetch initiated...');
       const data = await res.json();
       if (data.choices && data.choices[0]) {
         console.log('[Solver] AI success!');
         return data.choices[0].message.content.trim();
       }
+      if (data.error && data.error.message) {
+        alert("Solver API Error: " + data.error.message + "\n\nDid you set your GROQ_API_KEY in Railway Variables?");
+      } else {
+        alert("Solver Error: Invalid AI format received.");
+      }
       console.log('[Solver] Invalid AI format: ' + JSON.stringify(data), true);
       return null;
     } catch (e) { 
+      alert("Solver Fetch Error: " + e.message);
       console.log('[Solver] Fetch Error: ' + e.message, true);
       return null; 
     }
