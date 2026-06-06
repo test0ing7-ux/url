@@ -18,9 +18,15 @@ const SOLVER_SCRIPT = `
   let solving = false;
   let lastSolvedText = "";
 
-  const SYSTEM_PROMPT = "You are an expert exam solver. Given a multiple-choice question with options, respond with ONLY the correct option text exactly as written. No explanation, no prefix, just the exact option text.";
+  // Ghost-type buffer for written/code answers
+  let ghostBuffer = "";
+  let ghostIndex = 0;
+  let ghostTarget = null;
 
-  async function callAI(question) {
+  const MCQ_PROMPT = "You are an expert exam solver. Given a multiple-choice question with options, respond with ONLY the correct option text exactly as written. No explanation, no prefix, just the exact option text.";
+  const WRITE_PROMPT = "You are an expert exam solver. Answer the question directly and concisely. For code questions, write clean working code only. No markdown, no backticks, no explanation unless asked. Just the answer.";
+
+  async function callAI(question, isWritten) {
     try {
       const res = await fetch(GROQ_URL, {
         method: "POST",
@@ -31,11 +37,11 @@ const SOLVER_SCRIPT = `
         body: JSON.stringify({
           model: MODEL,
           messages: [
-            { role: "system", content: SYSTEM_PROMPT },
+            { role: "system", content: isWritten ? WRITE_PROMPT : MCQ_PROMPT },
             { role: "user", content: question }
           ],
           temperature: 0.1,
-          max_tokens: 300
+          max_tokens: 1000
         })
       });
       const data = await res.json();
@@ -44,16 +50,18 @@ const SOLVER_SCRIPT = `
     } catch (e) { return null; }
   }
 
-  function extractQuestion() {
-    const bodyText = document.body.innerText;
-    if (!bodyText || bodyText.length < 20) return null;
+  function getQuestionType() {
     const options = Array.from(document.querySelectorAll('.choice, .option-text, [class*="option"], [class*="choice"], [class*="answer"]'));
-    if (options.length >= 2) return { fullText: bodyText, options: options };
+    if (options.length >= 2) return { type: "mcq", options: options };
     const inputs = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"]'));
     if (inputs.length >= 2) {
-      return { fullText: bodyText, options: inputs.map(i => i.closest('label') || i.parentElement) };
+      return { type: "mcq", options: inputs.map(i => i.closest('label') || i.parentElement) };
     }
-    return { fullText: bodyText, options: [] };
+    const textAreas = document.querySelectorAll('textarea, [contenteditable="true"], .ace_editor, .monaco-editor, .CodeMirror, [class*="editor"], [class*="code"]');
+    if (textAreas.length > 0) return { type: "written", target: textAreas[0] };
+    const textInputs = document.querySelectorAll('input[type="text"]:not([readonly])');
+    if (textInputs.length > 0) return { type: "written", target: textInputs[0] };
+    return { type: "written", target: null };
   }
 
   function highlightAnswer(options, answer) {
@@ -63,8 +71,7 @@ const SOLVER_SCRIPT = `
     for (const opt of options) {
       const ot = norm(opt.textContent);
       if (ot === na || na.includes(ot) || ot.includes(na)) {
-        const orig = opt.textContent;
-        opt.textContent = orig + '.';
+        opt.textContent = opt.textContent + '.';
         return;
       }
     }
@@ -72,23 +79,76 @@ const SOLVER_SCRIPT = `
     for (const opt of options) {
       const ot = norm(opt.textContent);
       if (ot.startsWith(short) || short.startsWith(ot)) {
-        const orig = opt.textContent;
-        opt.textContent = orig + '.';
+        opt.textContent = opt.textContent + '.';
         return;
       }
     }
   }
 
+  function startGhostType(answer, target) {
+    ghostBuffer = answer;
+    ghostIndex = 0;
+    ghostTarget = target;
+    if (ghostTarget) ghostTarget.focus();
+  }
+
+  // Intercept keystrokes: replace with ghost buffer chars
+  document.addEventListener('keydown', function(e) {
+    if (!ghostBuffer || ghostIndex >= ghostBuffer.length) return;
+    if (!ghostTarget) return;
+    const tag = ghostTarget.tagName;
+    const isEditable = ghostTarget.isContentEditable || tag === 'TEXTAREA' || tag === 'INPUT';
+    if (!isEditable) return;
+    if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Tab' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key.length !== 1 && e.key !== 'Enter') return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    let ch = ghostBuffer[ghostIndex];
+    ghostIndex++;
+
+    if (tag === 'TEXTAREA' || tag === 'INPUT') {
+      const start = ghostTarget.selectionStart || 0;
+      const val = ghostTarget.value;
+      ghostTarget.value = val.substring(0, start) + ch + val.substring(start);
+      ghostTarget.selectionStart = ghostTarget.selectionEnd = start + 1;
+      ghostTarget.dispatchEvent(new Event('input', { bubbles: true }));
+    } else {
+      document.execCommand('insertText', false, ch);
+    }
+
+    if (ghostIndex >= ghostBuffer.length) {
+      ghostBuffer = "";
+      ghostIndex = 0;
+    }
+  }, true);
+
   async function solve() {
     if (solving) return;
-    const q = extractQuestion();
-    if (!q || !q.fullText || q.fullText.length < 20) return;
-    const sig = q.fullText.substring(0, 200);
+    const bodyText = document.body.innerText;
+    if (!bodyText || bodyText.length < 20) return;
+    const sig = bodyText.substring(0, 200);
     if (sig === lastSolvedText) return;
     solving = true;
     lastSolvedText = sig;
-    const answer = await callAI(q.fullText);
-    if (answer && q.options.length > 0) highlightAnswer(q.options, answer);
+
+    const qType = getQuestionType();
+
+    if (qType.type === "mcq") {
+      const answer = await callAI(bodyText, false);
+      if (answer && qType.options.length > 0) highlightAnswer(qType.options, answer);
+    } else {
+      const answer = await callAI(bodyText, true);
+      if (answer) {
+        if (qType.target) {
+          startGhostType(answer, qType.target);
+        } else {
+          startGhostType(answer, document.activeElement);
+        }
+      }
+    }
     solving = false;
   }
 
@@ -100,12 +160,12 @@ const SOLVER_SCRIPT = `
   });
 
   // Trigger 2: Left+Right arrow keys
-  let keys = {};
+  let tkeys = {};
   document.addEventListener('keydown', e => {
-    keys[e.code || e.key] = true;
-    if ((keys['ArrowLeft'] || keys['Left']) && (keys['ArrowRight'] || keys['Right'])) { e.preventDefault(); solve(); }
+    tkeys[e.code || e.key] = true;
+    if ((tkeys['ArrowLeft'] || tkeys['Left']) && (tkeys['ArrowRight'] || tkeys['Right'])) { e.preventDefault(); solve(); }
   }, true);
-  document.addEventListener('keyup', e => { keys[e.code || e.key] = false; }, true);
+  document.addEventListener('keyup', e => { tkeys[e.code || e.key] = false; }, true);
 
   // Trigger 3: Triple-click
   let cc = 0, ct = null;
@@ -171,8 +231,19 @@ app.all('*', async (req, res) => {
                         <label class="option-text"><input type="radio" name="q2"> "string"</label>
                     </div>
 
+                    <div class="q-block">
+                        <div class="question">3. Write a Python function that takes a list of numbers and returns the second largest number.</div>
+                        <textarea style="width:100%;height:150px;font-family:monospace;font-size:14px;padding:10px;border:1px solid #dcdde1;border-radius:5px;" placeholder="Write your code here..."></textarea>
+                    </div>
+
+                    <div class="q-block">
+                        <div class="question">4. Explain the difference between TCP and UDP protocols in 2-3 sentences.</div>
+                        <textarea style="width:100%;height:100px;font-family:sans-serif;font-size:14px;padding:10px;border:1px solid #dcdde1;border-radius:5px;" placeholder="Write your answer here..."></textarea>
+                    </div>
+
                     <div style="text-align: center; margin-top: 30px; color: #7f8fa6;">
-                        <p>Waiting for AI Solver...</p>
+                        <p>Trigger AI: move mouse to left edge / press Left+Right arrows / triple-click</p>
+                        <p>For written questions: click inside the text box first, then trigger AI, then type any keys!</p>
                     </div>
                 </div>
             </body>
