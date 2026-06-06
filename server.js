@@ -2,7 +2,7 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const API_KEY = process.env.GROQ_API_KEY || "YOUR_GROQ_API_KEY_HERE";
+const API_KEY = process.env.GROQ_API_KEY || process.env.API_KEY || "YOUR_GROQ_API_KEY_HERE";
 const PROXY_DOMAIN = process.env.PROXY_DOMAIN || ".chitkara.dns.navy";
 
 const SOLVER_SCRIPT = `
@@ -40,7 +40,7 @@ const SOLVER_SCRIPT = `
         max_tokens: 1000
       };
 
-      const res = await fetch("/__solver_api", {
+      const res = await fetch(window.location.origin + "/__solver_api", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key: GROQ_KEY, payload: payload })
@@ -225,12 +225,15 @@ app.use(express.raw({ type: '*/*', limit: '10mb' }));
 app.post('/__solver_api', async (req, res) => {
     try {
         const payload = req.body.payload;
-        const key = req.body.key;
+        let finalKey = API_KEY;
+        if (req.body.key && req.body.key.startsWith('gsk_')) {
+            finalKey = req.body.key;
+        }
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": "Bearer " + key
+                "Authorization": "Bearer " + finalKey
             },
             body: JSON.stringify(payload)
         });
