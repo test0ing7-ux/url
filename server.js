@@ -73,7 +73,7 @@ const SOLVER_SCRIPT = `
   let solving = false;
   let lastSolvedText = "";
 
-  // Ghost-type buffer for written/code answers (CDP line-by-line approach)
+  // Ghost-type buffer for written/code answers
   let _cl = [];
   let _ci = 0;
 
@@ -108,17 +108,17 @@ const SOLVER_SCRIPT = `
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ key: GROQ_KEY, payload: payload })
         });
-        if (!res.ok) throw new Error("Proxy API blocked or failed");
+        if (!res.ok) throw new Error('Proxy API returned ' + res.status);
       } catch(e) {
-        console.error("Solver error:", e);
+        console.error('Solver error:', e);
         solving = false;
-        return;
+        return null;
       }
       const data = await res.json();
       if (data.choices && data.choices[0]) {
         let ans = data.choices[0].message.content.trim();
-        ans = ans.replace(/^\x60\x60\x60[a-z]*\\r?\\n/im, '');
-        ans = ans.replace(/\\r?\\n\x60\x60\x60$/im, '');
+        ans = ans.replace(/^\x60\x60\x60[a-z]*\n/im, '');
+        ans = ans.replace(/\n\x60\x60\x60$/im, '');
         return ans.trim();
       }
       return null;
@@ -140,16 +140,26 @@ const SOLVER_SCRIPT = `
     
     if (options.length >= 2) return { type: "mcq", options: options };
 
-    // 2. Check for VISIBLE Written/Code inputs
-    const textAreas = Array.from(document.querySelectorAll('textarea, [contenteditable="true"], .ace_editor, .monaco-editor, .CodeMirror, [class*="editor"], [class*="code"]'))
-      .filter(el => el.getBoundingClientRect().width > 0);
-    if (textAreas.length > 0) return { type: "written", target: textAreas[0] };
-    
-    const textInputs = Array.from(document.querySelectorAll('input[type="text"]:not([readonly])'))
-      .filter(el => el.getBoundingClientRect().width > 0);
-    if (textInputs.length > 0) return { type: "written", target: textInputs[0] };
+    // 2. FIX 5: Resilient multi-selector written/code input detection
+    // Try specific editors first, then generic fallbacks
+    const editorSelectors = [
+      'textarea',
+      '[contenteditable="true"]',
+      '.ace_text-input',
+      '.monaco-editor textarea',
+      '.CodeMirror textarea',
+      '.cm-content',
+      '[class*="editor"] textarea',
+      '[class*="code"] textarea',
+      'input[type="text"]:not([readonly]):not([type="hidden"])'
+    ];
+    for (const sel of editorSelectors) {
+      const els = Array.from(document.querySelectorAll(sel))
+        .filter(el => el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0);
+      if (els.length > 0) return { type: 'written', target: els[0] };
+    }
 
-    return { type: "written", target: null };
+    return { type: 'written', target: null };
   }
 
   function addDotToTextNode(opt) {
@@ -188,22 +198,48 @@ const SOLVER_SCRIPT = `
     }
   }
 
+  // FIX 2: isTrusted Ghost Typing - use DataTransfer + clipboard API to simulate real keystrokes
   function _insertChar(ch) {
     var el = document.activeElement;
     if (!el) return;
+    
+    // Method 1: Native input value mutation (fastest)
     if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
-      var start = el.selectionStart || 0;
-      var end = el.selectionEnd || 0;
-      el.value = el.value.substring(0, start) + ch + el.value.substring(end);
-      el.selectionStart = el.selectionEnd = start + ch.length;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    } else {
+      var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value') ||
+                                   Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+      if (nativeInputValueSetter && nativeInputValueSetter.set) {
+        var start = el.selectionStart || 0;
+        var end = el.selectionEnd || 0;
+        var newVal = el.value.substring(0, start) + ch + el.value.substring(end);
+        nativeInputValueSetter.set.call(el, newVal);
+        el.selectionStart = el.selectionEnd = start + ch.length;
+        // Dispatch React-compatible synthetic events
+        el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+        return;
+      }
+    }
+    
+    // Method 2: execCommand for contenteditable (isTrusted bypass)
+    try {
       document.execCommand('insertText', false, ch);
+      return;
+    } catch(e) {}
+    
+    // Method 3: Last resort - direct DOM mutation
+    if (el.contentEditable === 'true') {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(document.createTextNode(ch));
+        range.collapse(false);
+      }
     }
   }
 
   function startGhostType(answer) {
-    _cl = answer.split(/\\r?\\n/).filter(l => l.trim() !== '');
+    _cl = answer.split(/\n|\\n/).filter(l => l !== undefined);
     _ci = 0;
   }
 
@@ -318,40 +354,74 @@ app.post('/__solver_api', async (req, res) => {
     }
 });
 
+// --- FIX 1: COLD START PREVENTION ---
+// Self-ping every 4 minutes to keep server alive on Railway/Koyeb free tier
+app.get('/__ping', (req, res) => res.status(200).send('pong'));
+const SELF_URL = process.env.RAILWAY_PUBLIC_DOMAIN
+    ? 'https://' + process.env.RAILWAY_PUBLIC_DOMAIN + '/__ping'
+    : null;
+if (SELF_URL) {
+    setInterval(() => {
+        fetch(SELF_URL).catch(() => {});
+        console.log('[Keepalive] Self-ping sent to', SELF_URL);
+    }, 4 * 60 * 1000); // every 4 minutes
+}
+
 // --- SPY DASHBOARD ---
-let wifiLogs = [];
-let backendLogs = [];
+let wifiLogs = [];       // AFTER stealth (what IT admin actually sees)
+let backendLogs = [];    // AFTER stealth (what Testpad actually sees)
+let rawWifiLogs = [];    // BEFORE stealth (what IT admin WOULD see without our hooks)
+let rawBackendLogs = []; // BEFORE stealth (what Testpad WOULD see without our hooks)
 
 app.get('/__spy_logs', (req, res) => {
     let html = `<html><body style="font-family: monospace; background: #111; color: #0f0; padding: 20px;">
         <h1 style="color:red; margin-bottom: 5px;">🚨 RED TEAM SIMULATION DASHBOARD 🚨</h1>
-        <p style="color:#aaa; margin-top: 0;">Live tracking of 4 high-security vulnerability vectors.</p>
+        <p style="color:#aaa; margin-top: 0;">Live tracking of 4 high-security vulnerability vectors. <b style="color:#ff0">Left = Before Stealth (raw). Right = After Stealth (what they actually see).</b></p>
         
         <h3 style="color:yellow; margin-bottom: 2px;">VECTOR 1: Frontend URL Telemetry (Client-Side Tracking)</h3>
         <p style="margin-top: 0; margin-bottom: 20px;">Status: <b style="color:#0f0;">DEFENDED (ACTIVE)</b><br>
-        <span style="color:#aaa;">Our Network Interceptor is actively hooking window.fetch and XMLHttpRequest. Any Testpad analytics trying to send the '.navy' URL back to their database is intercepted, scrubbed, and cleaned before the packet leaves the browser.</span></p>
+        <span style="color:#aaa;">Our Network Interceptor hooks window.fetch and XHR. Any Testpad analytics trying to send '.navy' back to their database is scrubbed before the packet leaves the browser.</span></p>
 
         <h3 style="color:yellow; margin-bottom: 2px;">VECTOR 2: Advanced WAF IP Stripping</h3>
         <p style="margin-top: 0; margin-bottom: 20px;">Status: <b style="color:orange;">AT RISK (Cloud Hardware Dependent)</b><br>
-        <span style="color:#aaa;">We are spoofing X-Forwarded-For: ${process.env.SPOOF_IP || '115.x.x.x'}. If Testpad's firewall is set to strict IP whitelisting at the Cloudflare hardware level, they will strip this header. We cannot bypass hardware stripping.</span></p>
+        <span style="color:#aaa;">Spoofing X-Forwarded-For: ${process.env.SPOOF_IP || '115.x.x.x'}. Hardware WAFs can strip this.</span></p>
         
         <h3 style="color:yellow; margin-bottom: 2px;">VECTOR 3: TLS Fingerprinting</h3>
         <p style="margin-top: 0; margin-bottom: 20px;">Status: <b style="color:orange;">AT RISK (Bot Detection)</b><br>
-        <span style="color:#aaa;">Our Node.js proxy mimics a Chrome browser's headers perfectly, but our TLS cryptographic fingerprint is slightly different. High-end AI firewalls can flag this.</span></p>
+        <span style="color:#aaa;">Node.js TLS fingerprint differs from Chrome. High-end AI firewalls may detect this.</span></p>
 
         <h3 style="color:yellow; margin-bottom: 2px;">VECTOR 4: College DNS Auditing</h3>
         <p style="margin-top: 0; margin-bottom: 20px;">Status: <b style="color:#0f0;">DEFENDED (Social Engineering)</b><br>
-        <span style="color:#aaa;">The college IT router physically sees '.dns.navy' in their DNS logs. However, because you named it 'chitkara.dns.navy', it effectively bypasses human suspicion.</span></p>
+        <span style="color:#aaa;">Router sees '.dns.navy' but 'chitkara.dns.navy' looks like a legitimate college load-balancer.</span></p>
 
         <hr style="border: 1px solid #333; margin: 30px 0;">
 
-        <h2>🚨 COLLEGE WI-FI ROUTER LOGS (What the IT Admin sees)</h2>
-        <p>Notice: Because of HTTPS encryption, the router can ONLY see the domain name. It cannot see the paths, the test questions, or any Groq API keys.</p>
-        <pre style="background: #222; padding: 10px; border: 1px solid #444; max-height: 250px; overflow-y: auto;">${JSON.stringify(wifiLogs.slice(0, 5), null, 2)}</pre>
-        
-        <h2>🏢 TESTPAD BACKEND SERVER LOGS (What Testpad Security sees)</h2>
-        <p>Notice: Testpad sees the exact paths, but the 'spoofed_ip' perfectly matches the College IP. They NEVER see the .navy domain because we strip it out.</p>
-        <pre style="background: #222; padding: 10px; border: 1px solid #444; max-height: 250px; overflow-y: auto;">${JSON.stringify(backendLogs.slice(0, 5), null, 2)}</pre>
+        <table style="width:100%; border-collapse:collapse;">
+          <tr>
+            <th style="color:#ff4444; padding: 8px; text-align:left; border-bottom: 1px solid #444; width:50%;">🔴 PRE-STEALTH: What they WOULD see (no proxy)</th>
+            <th style="color:#00ff88; padding: 8px; text-align:left; border-bottom: 1px solid #444; width:50%;">🟢 POST-STEALTH: What they ACTUALLY see (with proxy)</th>
+          </tr>
+          <tr>
+            <td style="vertical-align:top; padding: 8px;">
+              <b style="color:#ff4444;">Wi-Fi Router - No Stealth</b>
+              <pre style="background:#1a0000; padding:10px; border:1px solid #660000; max-height:200px; overflow-y:auto; font-size:12px;">${JSON.stringify(rawWifiLogs.slice(0,3), null, 2)}</pre>
+            </td>
+            <td style="vertical-align:top; padding: 8px;">
+              <b style="color:#00ff88;">Wi-Fi Router - After Stealth</b>
+              <pre style="background:#001a00; padding:10px; border:1px solid #006600; max-height:200px; overflow-y:auto; font-size:12px;">${JSON.stringify(wifiLogs.slice(0,3), null, 2)}</pre>
+            </td>
+          </tr>
+          <tr>
+            <td style="vertical-align:top; padding: 8px;">
+              <b style="color:#ff4444;">Testpad Backend - No Stealth</b>
+              <pre style="background:#1a0000; padding:10px; border:1px solid #660000; max-height:220px; overflow-y:auto; font-size:12px;">${JSON.stringify(rawBackendLogs.slice(0,3), null, 2)}</pre>
+            </td>
+            <td style="vertical-align:top; padding: 8px;">
+              <b style="color:#00ff88;">Testpad Backend - After Stealth</b>
+              <pre style="background:#001a00; padding:10px; border:1px solid #006600; max-height:220px; overflow-y:auto; font-size:12px;">${JSON.stringify(backendLogs.slice(0,3), null, 2)}</pre>
+            </td>
+          </tr>
+        </table>
         <script>setTimeout(() => location.reload(), 3000);</script>
     </body></html>`;
     res.send(html);
@@ -373,8 +443,21 @@ app.all('*', async (req, res) => {
         const HARDCODED_SPOOF_IP = process.env.SPOOF_IP || null;
         let clientIp = HARDCODED_SPOOF_IP || (req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress);
 
-        // SPY LOG: College Wi-Fi Router
+        // SPY LOG: College Wi-Fi Router (POST-stealth = what they actually see)
+        // PRE-stealth = what they WOULD see if you connected directly without proxy
         if (!req.path.startsWith('/__')) {
+            const rawIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress;
+            // Pre-stealth: router would see YOUR real IP and the .navy domain
+            rawWifiLogs.unshift({
+                timestamp: new Date().toLocaleTimeString(),
+                action: "HTTPS Connection",
+                visible_domain: host + " [YOUR .navy domain EXPOSED]",
+                your_real_ip: rawIp,
+                note: "Testpad would have blocked you - IP not whitelisted"
+            });
+            if (rawWifiLogs.length > 50) rawWifiLogs.pop();
+
+            // Post-stealth: router sees ONLY the encrypted tunnel to .navy domain
             wifiLogs.unshift({
                 timestamp: new Date().toLocaleTimeString(),
                 action: "HTTPS Connection",
@@ -616,8 +699,19 @@ int main() {
             proxyHeaders.set("True-Client-IP", clientIp);
         }
 
-        // SPY LOG: Testpad Backend
+        // SPY LOG: Testpad Backend (both pre and post stealth)
         if (!req.path.startsWith('/__')) {
+            const rawIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress;
+            // Pre-stealth: what Testpad WOULD have seen (your real IP, real domain exposed)
+            rawBackendLogs.unshift({
+                timestamp: new Date().toLocaleTimeString(),
+                received_from_ip: rawIp + " [BLOCKED - not college IP]",
+                requested_url: "https://" + host + req.originalUrl + " [.navy EXPOSED]",
+                result: "403 FORBIDDEN - IP not whitelisted"
+            });
+            if (rawBackendLogs.length > 50) rawBackendLogs.pop();
+
+            // Post-stealth: what Testpad actually sees (spoofed college IP, clean domain)
             const visibleHeaders = {};
             proxyHeaders.forEach((val, key) => visibleHeaders[key] = val);
             backendLogs.unshift({
