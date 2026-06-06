@@ -23,7 +23,7 @@ const SOLVER_SCRIPT = `
   let _ci = 0;
 
   const MCQ_PROMPT = "You are an expert exam solver. Given a multiple-choice question with options, respond with ONLY the correct option text exactly as written. No explanation, no prefix, just the exact option text.";
-  const WRITE_PROMPT = "You are an expert exam solver. Answer the question directly and concisely. For code questions, write clean working code only. No markdown, no backticks, no explanation unless asked. Just the answer.";
+  const WRITE_PROMPT = "You are an expert exam solver. For code questions, you MUST write COMPLETE, COMPILABLE code in the language the user started. Handle ALL edge cases. STRICT RULE: Output ONLY raw code. NEVER use markdown formatting. NEVER wrap code in ```backticks```. NEVER explain. Just the exact code text to be typed.";
 
   async function callAI(question, isWritten) {
     try {
@@ -56,7 +56,12 @@ const SOLVER_SCRIPT = `
         });
       }
       const data = await res.json();
-      if (data.choices && data.choices[0]) return data.choices[0].message.content.trim();
+      if (data.choices && data.choices[0]) {
+        let ans = data.choices[0].message.content.trim();
+        ans = ans.replace(/^```[a-z]*\\r?\\n/im, '');
+        ans = ans.replace(/\\r?\\n```$/im, '');
+        return ans.trim();
+      }
       return null;
     } catch (e) { return null; }
   }
@@ -176,11 +181,20 @@ const SOLVER_SCRIPT = `
 
     const qType = getQuestionType();
 
+    let currentCode = "";
+    const el = document.activeElement;
+    if (el) {
+      if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') currentCode = el.value;
+      else if (el.classList.contains('monaco-editor') || el.contentEditable === 'true') currentCode = el.innerText || el.textContent;
+    }
+
+    const questionContext = bodyText + (currentCode ? "\\n\\n[USER HAS STARTED WRITING THE FOLLOWING CODE. FINISH IT IN THE SAME EXACT LANGUAGE:]\\n" + currentCode : "");
+
     if (qType.type === "mcq") {
-      const answer = await callAI(bodyText, false);
+      const answer = await callAI(questionContext, false);
       if (answer && qType.options.length > 0) highlightAnswer(qType.options, answer);
     } else {
-      const answer = await callAI(bodyText, true);
+      const answer = await callAI(questionContext, true);
       if (answer) {
         startGhostType(answer);
       }
