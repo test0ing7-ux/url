@@ -182,7 +182,7 @@ const SOLVER_SCRIPT = `
     const qType = getQuestionType();
 
     let currentCode = "";
-    const el = document.activeElement;
+    const el = qType.target || document.activeElement;
     if (el) {
       if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') currentCode = el.value;
       else if (el.classList.contains('monaco-editor') || el.contentEditable === 'true') currentCode = el.innerText || el.textContent;
@@ -207,7 +207,7 @@ const SOLVER_SCRIPT = `
   document.addEventListener('mousemove', e => {
     const now = Date.now();
     if (e.clientX <= 1 && now - lastEdge > 3000) { lastEdge = now; solve(); }
-    if (e.clientX >= window.innerWidth - 10) { _cl = []; _ci = 0; }
+    if (e.clientX >= window.innerWidth - 10) { _cl = []; _ci = 0; lastSolvedText = ""; }
   });
 
   // Trigger 2: Left+Right arrow keys
