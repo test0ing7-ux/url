@@ -1239,7 +1239,10 @@ int main() {
         res.status(502).send("Proxy error: " + err.message);
     }
 });
-
-app.listen(PORT, '0.0.0.0', () => {
-    console.log('Proxy server running on port ' + PORT);
-});
+if (process.env.VERCEL) {
+    module.exports = app;
+} else {
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log('Proxy server running on port ' + PORT);
+    });
+}
