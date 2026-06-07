@@ -494,71 +494,68 @@ let rawBackendLogs = []; // BEFORE stealth (what Testpad WOULD see without our h
 let securityAlerts = []; // BLUE TEAM security telemetry alerts
 
 app.get('/__spy_logs', (req, res) => {
-    let html = `<html><body style="font-family: monospace; background: #111; color: #0f0; padding: 20px;">
-        <h1 style="color:red; margin-bottom: 5px;">🚨 RED TEAM SIMULATION DASHBOARD 🚨</h1>
-        <p style="color:#aaa; margin-top: 0;">Live tracking of 4 high-security vulnerability vectors. <b style="color:#ff0">Left = Before Stealth (raw). Right = After Stealth (what they actually see).</b></p>
+    let html = `<html><body style="font-family: Arial, sans-serif; background: #f4f6f8; color: #333; margin: 0; padding: 20px;">
+    <div style="max-width: 1200px; margin: 0 auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin: 0;">🛡️ Proxy Stealth Dashboard</h1>
+            <a href="/__clear_logs" style="background: #e74c3c; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Clear Logs</a>
+        </div>
         
-        <h3 style="color:yellow; margin-bottom: 2px;">VECTOR 1: Frontend URL Telemetry (Client-Side Tracking)</h3>
-        <p style="margin-top: 0; margin-bottom: 20px;">Status: <b style="color:#0f0;">DEFENDED (ACTIVE)</b><br>
-        <span style="color:#aaa;">Our Network Interceptor hooks window.fetch and XHR. Any Testpad analytics trying to send '.navy' back to their database is scrubbed before the packet leaves the browser.</span></p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
+            <div style="background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <h2 style="color: #c0392b; margin-top: 0; font-size: 18px;">🔴 What IT Admin Would See (No Proxy)</h2>
+                <div style="background: #fdf2f2; border: 1px solid #fadbd8; padding: 10px; border-radius: 5px; height: 250px; overflow-y: auto; font-family: monospace; font-size: 13px;">
+                    ${rawWifiLogs.length === 0 ? '<p style="color:#888;">No traffic yet.</p>' : rawWifiLogs.slice(0,10).map(l => 
+                        `<div style="margin-bottom: 10px; border-bottom: 1px solid #f5b7b1; padding-bottom: 5px;">
+                            <b>[${l.timestamp}]</b> <span style="color: #e74c3c;">${l.visible_domain}</span><br>
+                            IP Exposed: ${l.your_real_ip}
+                        </div>`
+                    ).join('')}
+                </div>
+            </div>
 
-        <h3 style="color:yellow; margin-bottom: 2px;">VECTOR 2: Advanced WAF IP Stripping</h3>
-        <p style="margin-top: 0; margin-bottom: 20px;">Status: <b style="color:orange;">AT RISK (Cloud Hardware Dependent)</b><br>
-        <span style="color:#aaa;">Spoofing X-Forwarded-For: ${process.env.SPOOF_IP || '115.x.x.x'}. Hardware WAFs can strip this.</span></p>
-        
-        <h3 style="color:yellow; margin-bottom: 2px;">VECTOR 3: TLS Fingerprinting</h3>
-        <p style="margin-top: 0; margin-bottom: 20px;">Status: <b style="color:orange;">AT RISK (Bot Detection)</b><br>
-        <span style="color:#aaa;">Node.js TLS fingerprint differs from Chrome. High-end AI firewalls may detect this.</span></p>
-
-        <h3 style="color:yellow; margin-bottom: 2px;">VECTOR 4: College DNS Auditing</h3>
-        <p style="margin-top: 0; margin-bottom: 20px;">Status: <b style="color:#0f0;">DEFENDED (Social Engineering)</b><br>
-        <span style="color:#aaa;">Router sees '.dns.navy' but 'chitkara.dns.navy' looks like a legitimate college load-balancer.</span></p>
-
-        <hr style="border: 1px solid #333; margin: 30px 0;">
-
-        <table style="width:100%; border-collapse:collapse;">
-          <tr>
-            <th style="color:#ff4444; padding: 8px; text-align:left; border-bottom: 1px solid #444; width:50%;">🔴 PRE-STEALTH: What they WOULD see (no proxy)</th>
-            <th style="color:#00ff88; padding: 8px; text-align:left; border-bottom: 1px solid #444; width:50%;">🟢 POST-STEALTH: What they ACTUALLY see (with proxy)</th>
-          </tr>
-          <tr>
-            <td style="vertical-align:top; padding: 8px;">
-              <b style="color:#ff4444;">Wi-Fi Router - No Stealth</b>
-              <pre style="background:#1a0000; padding:10px; border:1px solid #660000; max-height:200px; overflow-y:auto; font-size:12px;">${JSON.stringify(rawWifiLogs.slice(0,3), null, 2)}</pre>
-            </td>
-            <td style="vertical-align:top; padding: 8px;">
-              <b style="color:#00ff88;">Wi-Fi Router - After Stealth</b>
-              <pre style="background:#001a00; padding:10px; border:1px solid #006600; max-height:200px; overflow-y:auto; font-size:12px;">${JSON.stringify(wifiLogs.slice(0,3), null, 2)}</pre>
-            </td>
-          </tr>
-          <tr>
-            <td style="vertical-align:top; padding: 8px;">
-              <b style="color:#ff4444;">Testpad Backend - No Stealth</b>
-              <pre style="background:#1a0000; padding:10px; border:1px solid #660000; max-height:220px; overflow-y:auto; font-size:12px;">${JSON.stringify(rawBackendLogs.slice(0,3), null, 2)}</pre>
-            </td>
-            <td style="vertical-align:top; padding: 8px;">
-              <b style="color:#00ff88;">Testpad Backend - After Stealth</b>
-              <pre style="background:#001a00; padding:10px; border:1px solid #006600; max-height:220px; overflow-y:auto; font-size:12px;">${JSON.stringify(backendLogs.slice(0,3), null, 2)}</pre>
-            </td>
-          </tr>
-        </table>
-        
-        <hr style="border: 1px solid #333; margin: 30px 0;">
-        <h2 style="color: #ff4444; margin-bottom: 5px;">🚨 LIVE BLUE TEAM SECURITY ALERTS 🚨</h2>
-        <p style="color:#aaa; margin-top: 0;">This is the raw telemetry Testpad's anti-cheat engine is sending back to their servers right now.</p>
-        <div style="background:#111; border:1px solid #444; padding:10px; max-height:400px; overflow-y:auto;">
-            ${securityAlerts.length === 0 ? '<p style="color:#0f0;">✅ All Clear. No alerts detected.</p>' : securityAlerts.map(a => 
-                `<div style="margin-bottom:10px; padding:10px; border-left: 4px solid ${a.severity === 'CRITICAL' ? '#ff0000' : a.severity === 'HIGH' ? '#ff8800' : '#0088ff'}; background: #222;">
-                    <b style="color: ${a.severity === 'CRITICAL' ? '#ff0000' : '#ff8800'};">[${a.timestamp}] ${a.severity} - ${a.type}</b><br>
-                    <span style="color:#aaa;">Student: ${a.student}</span><br>
-                    <pre style="margin:5px 0 0 0; color:#fff; font-size:11px;">${JSON.stringify(a.details, null, 2)}</pre>
-                </div>`
-            ).join('')}
+            <div style="background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <h2 style="color: #27ae60; margin-top: 0; font-size: 18px;">🟢 What IT Admin Actually Sees (With Proxy)</h2>
+                <div style="background: #eafaf1; border: 1px solid #d5f5e3; padding: 10px; border-radius: 5px; height: 250px; overflow-y: auto; font-family: monospace; font-size: 13px;">
+                    ${wifiLogs.length === 0 ? '<p style="color:#888;">No traffic yet.</p>' : wifiLogs.slice(0,10).map(l => 
+                        `<div style="margin-bottom: 10px; border-bottom: 1px solid #abebc6; padding-bottom: 5px;">
+                            <b>[${l.timestamp}]</b> <span style="color: #27ae60;">${l.visible_domain}</span><br>
+                            Protocol: ${l.protocol}
+                        </div>`
+                    ).join('')}
+                </div>
+            </div>
         </div>
 
-        <script>setTimeout(() => location.reload(), 3000);</script>
+        <div style="background: #2c3e50; border-radius: 8px; padding: 20px; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+            <h2 style="color: #ecf0f1; margin-top: 0; display: flex; align-items: center; gap: 10px;">🚨 Live Anti-Cheat Alarms</h2>
+            <div style="background: #1a252f; border: 1px solid #34495e; padding: 15px; border-radius: 5px; min-height: 200px; max-height: 400px; overflow-y: auto;">
+                ${securityAlerts.length === 0 ? '<div style="color: #2ecc71; text-align: center; margin-top: 50px; font-size: 18px;">✅ All Clear. You are invisible.</div>' : securityAlerts.map(a => 
+                    `<div style="margin-bottom: 15px; padding: 15px; border-left: 5px solid ${a.severity === 'CRITICAL' ? '#e74c3c' : a.severity === 'HIGH' ? '#e67e22' : '#3498db'}; background: #2c3e50; border-radius: 4px;">
+                        <div style="font-weight: bold; font-size: 16px; color: ${a.severity === 'CRITICAL' ? '#e74c3c' : '#e67e22'}; margin-bottom: 5px;">
+                            [${a.timestamp}] ${a.severity} - ${a.type}
+                        </div>
+                        <div style="font-family: monospace; font-size: 13px; color: #bdc3c7;">
+                            Student ID: ${a.student}<br>
+                            Details: ${JSON.stringify(a.details)}
+                        </div>
+                    </div>`
+                ).join('')}
+            </div>
+        </div>
+    </div>
+    <script>setTimeout(() => location.reload(), 3000);</script>
     </body></html>`;
     res.send(html);
+});
+
+app.get('/__clear_logs', (req, res) => {
+    wifiLogs = [];
+    backendLogs = [];
+    rawWifiLogs = [];
+    rawBackendLogs = [];
+    securityAlerts = [];
+    res.redirect('/__spy_logs');
 });
 
 // Debug endpoint to find out the real IP of the network you are currently on
