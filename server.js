@@ -1081,11 +1081,11 @@ int main() {
             </body>
             
             </html>
-            \`;
+            `;
             
             // Simulate the proxy rewriting window.location to defeat domain checks
-            let rewrittenFakeHtml = fakeHtml.replace(/window\\.location\\.hostname/g, "('exam.testpad.chitkarauniversity.edu.in')");
-            rewrittenFakeHtml = rewrittenFakeHtml.replace(/location\\.hostname/g, "('exam.testpad.chitkarauniversity.edu.in')");
+            let rewrittenFakeHtml = fakeHtml.replace(/window\.location\.hostname/g, "('exam.testpad.chitkarauniversity.edu.in')");
+            rewrittenFakeHtml = rewrittenFakeHtml.replace(/location\.hostname/g, "('exam.testpad.chitkarauniversity.edu.in')");
 
             res.setHeader("Content-Type", "text/html; charset=utf-8");
             return res.status(200).send(rewrittenFakeHtml);
@@ -1216,8 +1216,8 @@ int main() {
             }
             
             // Spoof window.location.hostname in HTML inline scripts
-            html = html.replace(/window\\.location\\.hostname/g, "('" + originalHost + "')");
-            html = html.replace(/location\\.hostname/g, "('" + originalHost + "')");
+            html = html.replace(/window\.location\.hostname/g, "('" + originalHost + "')");
+            html = html.replace(/location\.hostname/g, "('" + originalHost + "')");
             
             return res.status(response.status).send(html);
         }
@@ -1226,8 +1226,8 @@ int main() {
         res.status(response.status);
         if (contentType && (contentType.includes("javascript") || contentType.includes("application/js") || contentType.includes("application/javascript"))) {
             let jsContent = await response.text();
-            jsContent = jsContent.replace(/window\\.location\\.hostname/g, "('" + originalHost + "')");
-            jsContent = jsContent.replace(/location\\.hostname/g, "('" + originalHost + "')");
+            jsContent = jsContent.replace(/window\.location\.hostname/g, "('" + originalHost + "')");
+            jsContent = jsContent.replace(/location\.hostname/g, "('" + originalHost + "')");
             res.setHeader("Content-Type", contentType);
             return res.send(jsContent);
         }
