@@ -6,10 +6,11 @@ const API_KEY = process.env.GROQ_API_KEY || process.env.API_KEY || "YOUR_GROQ_AP
 const PROXY_DOMAIN = process.env.PROXY_DOMAIN || ".chitkara.dns.navy";
 
 const STEALTH_SCRIPT = `
-<script>
+<script id="proxy-stealth">
 // 🔒 GOD MODE STEALTH ENGINE v2.0 🔒
 // Intercepts ALL possible detection vectors in the browser
 (function() {
+    try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     try {
         const PROXY_SUFFIX = '${PROXY_DOMAIN}';
         const REAL_ORIGIN = 'https://' + window.location.hostname.replace(PROXY_SUFFIX, '');
@@ -109,13 +110,30 @@ const STEALTH_SCRIPT = `
         if (navigator.sendBeacon) {
             const origBeacon = navigator.sendBeacon;
             navigator.sendBeacon = function(url, data) {
-                if (typeof url === 'string') url = scrub(url);
-                if (typeof data === 'string') data = scrub(data);
+                if (typeof url === 'string' && url.indexOf('/__') === -1) url = scrub(url);
                 return origBeacon.call(this, url, data);
             };
         }
 
-        // 2d. Intercept Image tracking pixels
+        // 2d. Intercept Performance API (Hide internal API calls from Network Audit)
+        try {
+            const origGetEntries = performance.getEntries;
+            performance.getEntries = function() {
+                return origGetEntries.call(this).filter(e => !(e.name && e.name.includes('/__')));
+            };
+            const origGetEntriesByType = performance.getEntriesByType;
+            performance.getEntriesByType = function(type) {
+                return origGetEntriesByType.call(this, type).filter(e => !(e.name && e.name.includes('/__')));
+            };
+            const origGetEntriesByName = performance.getEntriesByName;
+            performance.getEntriesByName = function(name, type) {
+                if (typeof name === 'string' && name.includes('/__')) return [];
+                return origGetEntriesByName.call(this, name, type);
+            };
+            performance.clearResourceTimings();
+        } catch(e) {}
+
+        // 2e. Intercept Image tracking pixels
         const origImage = window.Image;
         window.Image = function(...args) {
             const img = new origImage(...args);
@@ -190,6 +208,7 @@ const STEALTH_SCRIPT = `
 const SOLVER_SCRIPT = `
 <script>
 (function() {
+  try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
   if (window._solverActive) return;
   window._solverActive = true;
 
@@ -410,7 +429,7 @@ const SOLVER_SCRIPT = `
       else if (el.classList.contains('monaco-editor') || el.contentEditable === 'true') currentCode = el.innerText || el.textContent;
     }
 
-    const langSelect = document.querySelector('select.lang-select, select[class*="lang"]');
+    const langSelect = Array.from(document.querySelectorAll('select.lang-select, select[class*="lang"]')).find(el => el.getBoundingClientRect().width > 0);
     const selectedLang = langSelect ? langSelect.value : "the appropriate language";
     const questionContext = bodyText + "\\n\\n[STRICT REQUIREMENT: WRITE THE SOLUTION IN " + selectedLang + ". " + (currentCode ? "USER HAS ALREADY WRITTEN THIS CODE, FINISH IT EXACTLY:\\n" + currentCode : "") + "]";
 
