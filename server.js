@@ -17,7 +17,7 @@ const STEALTH_SCRIPT = `
 
         const scrub = (text) => {
             if (typeof text !== 'string') return text;
-            return text.replace(new RegExp(PROXY_SUFFIX.replace(/./g, '.'), 'g'), '');
+            return text.replace(new RegExp(PROXY_SUFFIX.replace(/\./g, '\\\\.'), 'g'), '');
         };
 
         // ====== LAYER 1: LOCATION SPOOFING ======
@@ -459,10 +459,22 @@ app.post('/__security_report', (req, res) => {
     res.status(200).send('OK');
 });
 
-// Parse bodies as raw buffers for the proxy
-app.use(express.raw({ type: '*/*', limit: '10mb' }));
+// Parse bodies as raw buffers for the proxy (skip internal API routes)
+app.use((req, res, next) => {
+    if (req.path === '/__solver_api' || req.path === '/__security_report') return next();
+    express.raw({ type: '*/*', limit: '10mb' })(req, res, next);
+});
+
+app.options('/__solver_api', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.status(204).end();
+});
 
 app.post('/__solver_api', async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     try {
         const payload = req.body.payload;
         let finalKey = API_KEY;
