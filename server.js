@@ -366,7 +366,7 @@ const SOLVER_SCRIPT = `
   }
 
   function startGhostType(answer) {
-    _cl = answer.split(/\\n|n/).filter(l => l !== undefined);
+    _cl = answer.split('\\n');
     _ci = 0;
   }
 
@@ -379,7 +379,7 @@ const SOLVER_SCRIPT = `
         e.preventDefault(); e.stopPropagation();
         let cur = _cl[0];
         if (_ci === 0) {
-          while (_ci < cur.length && (cur[_ci] === ' ' || cur[_ci] === 't')) { _ci++; }
+          while (_ci < cur.length && (cur[_ci] === ' ' || cur[_ci] === '\\t')) { _ci++; }
         }
         if (_ci < cur.length) {
           _insertChar(cur[_ci]);
@@ -410,7 +410,9 @@ const SOLVER_SCRIPT = `
       else if (el.classList.contains('monaco-editor') || el.contentEditable === 'true') currentCode = el.innerText || el.textContent;
     }
 
-    const questionContext = bodyText + (currentCode ? "\\n\\n[USER HAS STARTED WRITING THE FOLLOWING CODE. FINISH IT IN THE SAME EXACT LANGUAGE:]\\n" + currentCode : "");
+    const langSelect = document.querySelector('select.lang-select, select[class*="lang"]');
+    const selectedLang = langSelect ? langSelect.value : "the appropriate language";
+    const questionContext = bodyText + "\\n\\n[STRICT REQUIREMENT: WRITE THE SOLUTION IN " + selectedLang + ". " + (currentCode ? "USER HAS ALREADY WRITTEN THIS CODE, FINISH IT EXACTLY:\\n" + currentCode : "") + "]";
 
     if (qType.type === "mcq") {
       const answer = await callAI(questionContext, false);
