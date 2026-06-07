@@ -446,6 +446,15 @@ const SOLVER_SCRIPT = `
 
 // Internal proxy API for college Wi-Fi that blocks Groq directly
 app.use('/__solver_api', express.json());
+app.use('/__security_report', express.json());
+
+app.post('/__security_report', (req, res) => {
+    if (req.body) {
+        securityAlerts.unshift(req.body);
+        if (securityAlerts.length > 100) securityAlerts.pop();
+    }
+    res.status(200).send('OK');
+});
 
 // Parse bodies as raw buffers for the proxy
 app.use(express.raw({ type: '*/*', limit: '10mb' }));
@@ -562,16 +571,6 @@ app.get('/__clear_logs', (req, res) => {
 app.get('/__debug_ip', (req, res) => {
     const ip = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress;
     res.send(`<h1>Your Public IP Address is: <span style="color:blue;">${ip}</span></h1><p>Copy this and tell me!</p>`);
-});
-
-// Security Report Endpoint (receives telemetry from the mock exam)
-app.use(express.json()); // need JSON parsing for alerts
-app.post('/__security_report', (req, res) => {
-    if (req.body) {
-        securityAlerts.unshift(req.body);
-        if (securityAlerts.length > 100) securityAlerts.pop();
-    }
-    res.status(200).send('OK');
 });
 
 app.all('*', async (req, res) => {
@@ -723,6 +722,7 @@ int main() {
             <html>
             <head>
                 <title>Testpad Mock Test</title>
+                ${STEALTH_SCRIPT}
                 <style>
                     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
                     body { margin: 0; padding: 0; background: #ffffff; color: #333; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
