@@ -77,10 +77,6 @@ const STEALTH_SCRIPT = `
             let url = typeof args[0] === 'string' ? args[0] : (args[0] instanceof Request ? args[0].url : '');
             // Don't scrub internal proxy API calls
             if (url.indexOf('/__') === -1) {
-                if (typeof args[0] === 'string') args[0] = scrub(args[0]);
-                if (args[0] instanceof Request) {
-                    args[0] = new Request(scrub(args[0].url), args[0]);
-                }
                 if (args[1] && args[1].body && typeof args[1].body === 'string') {
                     args[1].body = scrub(args[1].body);
                 }
@@ -97,7 +93,6 @@ const STEALTH_SCRIPT = `
         // 2b. Intercept XHR
         const origOpen = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-            if (typeof url === 'string' && url.indexOf('/__') === -1) url = scrub(url);
             return origOpen.call(this, method, url, ...rest);
         };
         const origSend = XMLHttpRequest.prototype.send;
