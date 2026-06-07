@@ -366,7 +366,7 @@ const SOLVER_SCRIPT = `
   }
 
   function startGhostType(answer) {
-    _cl = answer.split(/\n|n/).filter(l => l !== undefined);
+    _cl = answer.split(/\\n|n/).filter(l => l !== undefined);
     _ci = 0;
   }
 
