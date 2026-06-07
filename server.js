@@ -620,10 +620,10 @@ app.all('*', async (req, res) => {
 
         // 1.5. MOCK EXAM WITH FULL BLUE TEAM SECURITY
         if (req.path === "/test/mock123" && !fullUrl.searchParams.has("json")) {
-            // Simulated Testpad IP Whitelist
-            const REQUIRED_IP = process.env.WHITELIST_IP || "1.2.3.4";
+            // Simulated Testpad IP Whitelist (College Lab IP)
+            const REQUIRED_IP = process.env.WHITELIST_IP || "115.242.155.86";
             
-            if (process.env.WHITELIST_IP && clientIp !== REQUIRED_IP) {
+            if (clientIp !== REQUIRED_IP) {
                 return res.status(403).send(`
                     <h1 style="color:red; text-align:center; margin-top:50px;">403 FORBIDDEN - IP NOT ALLOWED</h1>
                     <p style="text-align:center;">Testpad Security: Your IP (${clientIp}) is not on the college whitelist (${REQUIRED_IP}).</p>
