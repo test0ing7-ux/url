@@ -63,6 +63,11 @@ const STEALTH_SCRIPT = `
             });
         } catch(e) {}
 
+        // ====== LAYER 1.5: WEBRTC BLINDING ======
+        window.RTCPeerConnection = undefined;
+        window.webkitRTCPeerConnection = undefined;
+        window.mozRTCPeerConnection = undefined;
+
         // ====== LAYER 2: NETWORK INTERCEPTION ======
         // Scrub .navy from ALL outgoing network requests
 
@@ -1076,9 +1081,14 @@ int main() {
             </body>
             
             </html>
-            `;
+            \`;
+            
+            // Simulate the proxy rewriting window.location to defeat domain checks
+            let rewrittenFakeHtml = fakeHtml.replace(/window\\.location\\.hostname/g, "('exam.testpad.chitkarauniversity.edu.in')");
+            rewrittenFakeHtml = rewrittenFakeHtml.replace(/location\\.hostname/g, "('exam.testpad.chitkarauniversity.edu.in')");
+
             res.setHeader("Content-Type", "text/html; charset=utf-8");
-            return res.status(200).send(fakeHtml);
+            return res.status(200).send(rewrittenFakeHtml);
         }
 
         // 2. EXTRACT ORIGINAL HOST
@@ -1198,17 +1208,30 @@ int main() {
             html = html.replace(hostRegex, 'https://' + host);
 
             if (html.includes("</body>")) {
-                html = html.replace("</body>", STEALTH_SCRIPT + "n" + SOLVER_SCRIPT + "</body>");
+                html = html.replace("</body>", STEALTH_SCRIPT + "\\n" + SOLVER_SCRIPT + "\\n</body>");
             } else if (html.includes("</BODY>")) {
-                html = html.replace("</BODY>", STEALTH_SCRIPT + "n" + SOLVER_SCRIPT + "</BODY>");
+                html = html.replace("</BODY>", STEALTH_SCRIPT + "\\n" + SOLVER_SCRIPT + "\\n</BODY>");
             } else {
-                html = html + STEALTH_SCRIPT + "n" + SOLVER_SCRIPT;
+                html = html + "\\n" + STEALTH_SCRIPT + "\\n" + SOLVER_SCRIPT;
             }
+            
+            // Spoof window.location.hostname in HTML inline scripts
+            html = html.replace(/window\\.location\\.hostname/g, "('" + originalHost + "')");
+            html = html.replace(/location\\.hostname/g, "('" + originalHost + "')");
+            
             return res.status(response.status).send(html);
         }
 
         // Pass through non-HTML
         res.status(response.status);
+        if (contentType && (contentType.includes("javascript") || contentType.includes("application/js") || contentType.includes("application/javascript"))) {
+            let jsContent = await response.text();
+            jsContent = jsContent.replace(/window\\.location\\.hostname/g, "('" + originalHost + "')");
+            jsContent = jsContent.replace(/location\\.hostname/g, "('" + originalHost + "')");
+            res.setHeader("Content-Type", contentType);
+            return res.send(jsContent);
+        }
+        
         if (response.body) {
             const arrayBuffer = await response.arrayBuffer();
             res.send(Buffer.from(arrayBuffer));
