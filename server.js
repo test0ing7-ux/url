@@ -491,6 +491,7 @@ let wifiLogs = [];       // AFTER stealth (what IT admin actually sees)
 let backendLogs = [];    // AFTER stealth (what Testpad actually sees)
 let rawWifiLogs = [];    // BEFORE stealth (what IT admin WOULD see without our hooks)
 let rawBackendLogs = []; // BEFORE stealth (what Testpad WOULD see without our hooks)
+let securityAlerts = []; // BLUE TEAM security telemetry alerts
 
 app.get('/__spy_logs', (req, res) => {
     let html = `<html><body style="font-family: monospace; background: #111; color: #0f0; padding: 20px;">
@@ -541,6 +542,20 @@ app.get('/__spy_logs', (req, res) => {
             </td>
           </tr>
         </table>
+        
+        <hr style="border: 1px solid #333; margin: 30px 0;">
+        <h2 style="color: #ff4444; margin-bottom: 5px;">🚨 LIVE BLUE TEAM SECURITY ALERTS 🚨</h2>
+        <p style="color:#aaa; margin-top: 0;">This is the raw telemetry Testpad's anti-cheat engine is sending back to their servers right now.</p>
+        <div style="background:#111; border:1px solid #444; padding:10px; max-height:400px; overflow-y:auto;">
+            \${securityAlerts.length === 0 ? '<p style="color:#0f0;">✅ All Clear. No alerts detected.</p>' : securityAlerts.map(a => 
+                \`<div style="margin-bottom:10px; padding:10px; border-left: 4px solid \${a.severity === 'CRITICAL' ? '#ff0000' : a.severity === 'HIGH' ? '#ff8800' : '#0088ff'}; background: #222;">
+                    <b style="color: \${a.severity === 'CRITICAL' ? '#ff0000' : '#ff8800'};">[\${a.timestamp}] \${a.severity} - \${a.type}</b><br>
+                    <span style="color:#aaa;">Student: \${a.student}</span><br>
+                    <pre style="margin:5px 0 0 0; color:#fff; font-size:11px;">\${JSON.stringify(a.details, null, 2)}</pre>
+                </div>\`
+            ).join('')}
+        </div>
+
         <script>setTimeout(() => location.reload(), 3000);</script>
     </body></html>`;
     res.send(html);
@@ -549,7 +564,17 @@ app.get('/__spy_logs', (req, res) => {
 // Debug endpoint to find out the real IP of the network you are currently on
 app.get('/__debug_ip', (req, res) => {
     const ip = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress;
-    res.send(`<h1>Your Public IP Address is: <span style="color:blue;">${ip}</span></h1><p>Copy this and tell me!</p>`);
+    res.send(\`<h1>Your Public IP Address is: <span style="color:blue;">\${ip}</span></h1><p>Copy this and tell me!</p>\`);
+});
+
+// Security Report Endpoint (receives telemetry from the mock exam)
+app.use(express.json()); // need JSON parsing for alerts
+app.post('/__security_report', (req, res) => {
+    if (req.body) {
+        securityAlerts.unshift(req.body);
+        if (securityAlerts.length > 100) securityAlerts.pop();
+    }
+    res.status(200).send('OK');
 });
 
 app.all('*', async (req, res) => {
