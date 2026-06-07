@@ -17,7 +17,10 @@ const STEALTH_SCRIPT = `
 
         const scrub = (text) => {
             if (typeof text !== 'string') return text;
-            return text.replace(new RegExp(PROXY_SUFFIX.replace(/\./g, '\\\\.'), 'g'), '');
+            while (text.indexOf(PROXY_SUFFIX) !== -1) {
+                text = text.split(PROXY_SUFFIX).join('');
+            }
+            return text;
         };
 
         // ====== LAYER 1: LOCATION SPOOFING ======
@@ -64,18 +67,22 @@ const STEALTH_SCRIPT = `
         // 2a. Intercept Fetch
         const origFetch = window.fetch;
         window.fetch = async function(...args) {
-            if (typeof args[0] === 'string') args[0] = scrub(args[0]);
-            if (args[0] instanceof Request) {
-                args[0] = new Request(scrub(args[0].url), args[0]);
-            }
-            if (args[1] && args[1].body && typeof args[1].body === 'string') {
-                args[1].body = scrub(args[1].body);
-            }
-            if (args[1] && args[1].headers) {
-                const h = new Headers(args[1].headers);
-                if (h.get('referer')) h.set('referer', scrub(h.get('referer')));
-                if (h.get('origin')) h.set('origin', scrub(h.get('origin')));
-                args[1].headers = h;
+            let url = typeof args[0] === 'string' ? args[0] : (args[0] instanceof Request ? args[0].url : '');
+            // Don't scrub internal proxy API calls
+            if (url.indexOf('/__') === -1) {
+                if (typeof args[0] === 'string') args[0] = scrub(args[0]);
+                if (args[0] instanceof Request) {
+                    args[0] = new Request(scrub(args[0].url), args[0]);
+                }
+                if (args[1] && args[1].body && typeof args[1].body === 'string') {
+                    args[1].body = scrub(args[1].body);
+                }
+                if (args[1] && args[1].headers) {
+                    const h = new Headers(args[1].headers);
+                    if (h.get('referer')) h.set('referer', scrub(h.get('referer')));
+                    if (h.get('origin')) h.set('origin', scrub(h.get('origin')));
+                    args[1].headers = h;
+                }
             }
             return origFetch.apply(this, args);
         };
