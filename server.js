@@ -752,79 +752,97 @@ int main() {
                 }
 
             const fakeHtml = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Testpad Mock Test</title>
-                ${STEALTH_SCRIPT}
-                ${SOLVER_SCRIPT}
-                <style>
-                    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-                    body { margin: 0; padding: 0; background: #ffffff; color: #333; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-                    .header { height: 50px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; }
-                    .header-left { display: flex; align-items: center; gap: 20px; color: #757575; font-size: 20px; }
-                    .header-right { display: flex; align-items: center; gap: 15px; }
-                    .user-profile { text-align: right; line-height: 1.2; font-size: 12px; }
-                    .user-profile .name { font-weight: bold; color: #555; }
-                    .user-profile .role { color: #e67e22; font-size: 10px; text-transform: uppercase; }
-                    .avatar { width: 30px; height: 30px; background: #e67e22; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-                    .main-container { display: flex; flex: 1; height: calc(100vh - 50px); }
-                    .left-pane { width: 50%; border-right: 2px solid #f0f0f0; display: flex; flex-direction: column; }
-                    .tabs { display: flex; border-bottom: 1px solid #e0e0e0; padding-left: 20px; }
-                    .tab { padding: 10px 15px; font-size: 13px; color: #757575; cursor: pointer; }
-                    .tab.active { color: #e67e22; border-bottom: 2px solid #e67e22; font-weight: 500; }
-                    .q-content { flex: 1; padding: 30px; overflow-y: auto; }
-                    .q-title { font-size: 18px; color: #424242; margin-bottom: 20px; font-weight: normal; }
-                    .q-text { font-size: 14px; line-height: 1.6; color: #212121; }
-                    .nav-bar { height: 50px; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; background: #fafafa; }
-                    .nav-btn { color: #e67e22; background: none; border: none; cursor: pointer; font-size: 13px; font-weight: 500; }
-                    .nav-btn:disabled { color: #bdbdbd; cursor: not-allowed; }
-                    .report-link { color: #e67e22; font-size: 12px; text-decoration: none; }
-                    .right-pane { width: 50%; display: flex; flex-direction: column; background: #ffffff; }
-                    .mcq-container { padding: 30px; flex: 1; display: flex; flex-direction: column; }
-                    .mcq-header { font-size: 15px; color: #424242; margin-bottom: 20px; font-weight: 500; }
-                    .options-list { flex: 1; }
-                    .option-label { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; cursor: pointer; font-size: 13px; color: #555; }
-                    .option-label input[type="radio"] { width: 18px; height: 18px; accent-color: #e67e22; }
-                    .clear-selection { color: #e67e22; font-size: 12px; margin-top: 10px; cursor: pointer; }
-                    .code-header { height: 40px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; padding: 0 15px; background: #fafafa; }
-                    .lang-select { padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; }
-                    .code-editor { flex: 1; padding: 15px; font-family: monospace; font-size: 13px; line-height: 1.5; border: none; outline: none; resize: none; background: #fff; width: 100%; }
-                    .code-footer { height: 50px; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; background: #fafafa; }
-                    .submit-btn { background: #e67e22; color: white; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; font-size: 13px; margin-top: auto; align-self: flex-end; }
-                    .run-btn { background: #e67e22; color: white; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; font-size: 13px; }
-                    .view-section { display: none; height: 100%; width: 100%; }
-                    .view-section.active { display: flex; flex-direction: row; }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <div class="header-left">
-                        <span style="color: #e74c3c;">🔲</span>
-                        <span>📄</span>
-                        <span>📊</span>
-                    </div>
-                    <div class="header-right">
-                        <div class="user-profile">
-                            <div class="name">TEST USER</div>
-                            <div class="role">STUDENT</div>
-                        </div>
-                        <div class="avatar">T</div>
-                    </div>
-                </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chitkara | TestPad</title>
+    ${STEALTH_SCRIPT}
+    ${SOLVER_SCRIPT}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
+    <style>
+        :root { --orange: #ef6c00; --bg-grey: #f5f5f5; --text-main: #333; }
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+        .top-nav { height: 50px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; padding: 0 20px; justify-content: space-between; }
+        .top-nav .logo { width: 30px; height: 30px; background: var(--orange); border-radius: 4px; }
+        .user-info { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+        .avatar { width: 32px; height: 32px; background: #ef6c00; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        .tabs-bar { height: 40px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; padding-left: 50px; align-items: center; }
+        .tab { padding: 0 20px; font-size: 14px; color: #666; cursor: pointer; height: 100%; display: flex; align-items: center; border-bottom: 2px solid transparent; }
+        .tab.active { color: var(--orange); border-bottom-color: var(--orange); font-weight: 500; }
+        .workspace { flex: 1; display: flex; overflow: hidden; background: #fff; }
+        .left-pane { flex: 1; border-right: 1px solid #e0e0e0; overflow-y: auto; padding: 30px 50px; }
+        .q-title { font-size: 20px; font-weight: 500; margin-bottom: 25px; border-bottom: 2px solid #ffccbc; display: inline-block; padding-bottom: 5px; }
+        .right-pane { flex: 1; display: flex; flex-direction: column; background: #fff; position: relative; }
+        .mcq-container { padding: 40px; }
+        .option-item { display: flex; align-items: center; gap: 15px; padding: 15px 0; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+        .radio-circle { width: 18px; height: 18px; border: 2px solid #ccc; border-radius: 50%; }
+        .option-text { font-size: 14px; color: #333; }
+        .submit-btn { position: absolute; bottom: 40px; right: 40px; background: var(--orange); color: #fff; border: none; padding: 10px 30px; border-radius: 4px; font-weight: 500; cursor: pointer; }
+        #editor-container { flex: 1; width: 100%; }
+        .bottom-nav { height: 40px; background: #fff; border-top: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; font-size: 13px; color: #666; }
+        .nav-link { cursor: pointer; display: flex; align-items: center; gap: 5px; text-transform: lowercase; }
+    </style>
+</head>
+<body>
+    <div class="top-nav"><div class="logo"></div><div class="user-info"><div>CANDIDATE</div><div class="avatar">C</div></div></div>
+    <div class="workspace"><div class="left-pane" id="left-pane"></div><div class="right-pane" id="right-pane"></div></div>
+    <div class="bottom-nav">
+        <div class="nav-link" onclick="prevQ()">◀ previous</div>
+        <div id="q-count">1 / 32</div>
+        <div class="nav-link" onclick="nextQ()">next ▶</div>
+    </div>
 
-                ${examContentHtml}
+    <script>
+        const questions = [
+            { type: 'mcq', title: 'Time Speed Distance Q1', q: 'A train runs at the rate of 45 km/hr. What is its speed in metres per second?', options: ['12.5 m/sec', '25 m/sec', '10 m/sec', 'None of these'] },
+            { type: 'mcq', title: 'Time Speed Distance Q2', q: 'A train 100m long is running at the speed of 30 km/hr. Find the time taken by it to pass a man standing near the railway line.', options: ['10 seconds', '12 seconds', '15 seconds', '20 seconds'] },
+            { type: 'mcq', title: 'Time Speed Distance Q3', q: 'A train running at the speed of 60 km/hr crosses a pole in 9 seconds. What is the length of the train?', options: ['120 metres', '180 metres', '324 metres', '150 metres'] },
+            { type: 'mcq', title: 'Time Speed Distance Q4', q: 'How long does a train 110 meters long running at the speed of 72 km/hr take to cross a bridge 132 meters in length?', options: ['9.8 seconds', '12.1 seconds', '12.4 seconds', '14.3 seconds'] },
+            { type: 'mcq', title: 'Time Speed Distance Q5', q: 'A man walking at the rate of 5 km/hr crosses a bridge in 15 minutes. The length of the bridge (in metres) is:', options: ['600', '750', '1000', '1250'] },
+            { type: 'mcq', title: 'Time Speed Distance Q6', q: 'A car moves at the speed of 80 km/hr. What is the speed of the car in metres per second?', options: ['8 m/sec', '20.5 m/sec', '22.2 m/sec', '25 m/sec'] },
+            { type: 'mcq', title: 'Time Speed Distance Q7', q: 'An athlete runs 200 metres in 24 seconds. His speed is:', options: ['10 km/hr', '17 km/hr', '27 km/hr', '30 km/hr'] },
+            { type: 'mcq', title: 'Time Speed Distance Q8', q: 'A boy goes to his school from his house at a speed of 3 km/hr and returns at a speed of 2 km/hr. If he takes 5 hours in going and coming, the distance between his house and school is:', options: ['5 km', '5.5 km', '6 km', '6.5 km'] },
+            { type: 'mcq', title: 'Time Speed Distance Q9', q: 'If a person walks at 14 km/hr instead of 10 km/hr, he would have walked 20 km more. The actual distance travelled by him is:', options: ['50 km', '56 km', '70 km', '80 km'] },
+            { type: 'mcq', title: 'Time Speed Distance Q10', q: 'A train crosses a pole in 15 seconds and a 100 meters long platform in 25 seconds. The length of the train is:', options: ['125 m', '130 m', '150 m', '175 m'] },
+            { type: 'mcq', title: 'Time Speed Distance Q11', q: 'Two trains running in opposite directions cross a man standing on the platform in 27 seconds and 17 seconds respectively and they cross each other in 23 seconds. The ratio of their speeds is:', options: ['1:3', '3:2', '3:4', 'None of these'] },
+            { type: 'mcq', title: 'Time Speed Distance Q12', q: 'A car covers a distance of 816 km in 12 hours. What is the speed of the car?', options: ['60 km/hr', '62 km/hr', '64 km/hr', '68 km/hr'] },
+            { type: 'mcq', title: 'Time Speed Distance Q13', q: 'A person crosses a 600 m long street in 5 minutes. What is his speed in km per hour?', options: ['3.6', '7.2', '8.4', '10'] },
+            { type: 'mcq', title: 'Time Speed Distance Q14', q: 'A bus takes 15 hours to travel a distance of 750 kilometres. What should be its speed in km/hr?', options: ['40', '50', '60', '70'] },
+            { type: 'mcq', title: 'Time Speed Distance Q15', q: 'Walking 5/6 of its usual speed, a train is 10 minutes too late. Find its usual time to cover the journey.', options: ['40 min', '50 min', '60 min', '70 min'] },
+            { type: 'mcq', title: 'Time Speed Distance Q16', q: 'If a man runs at 3 m/sec, how many kilometres does he run in 1 hour and 40 minutes?', options: ['12 km', '15 km', '18 km', '21 km'] },
+            { type: 'mcq', title: 'Time Speed Distance Q17', q: 'A man on tour travels first 160 km at 64 km/hr and the next 160 km at 80 km/hr. The average speed for the first 320 km of the tour is:', options: ['35.55 km/hr', '36 km/hr', '71.11 km/hr', '72 km/hr'] },
+            { type: 'mcq', title: 'Time Speed Distance Q18', q: 'A train covers a distance in 50 minutes, if it runs at a speed of 48 km/hr on an average. The speed at which the train must run to reduce the time of journey to 40 minutes will be:', options: ['50 km/hr', '55 km/hr', '60 km/hr', '65 km/hr'] },
+            { type: 'mcq', title: 'Time Speed Distance Q19', q: 'A car traveling with 5/7 of its usual speed covers 42 km in 1 hour 40 min 48 sec. What is the usual speed of the car?', options: ['17.5 km/hr', '25 km/hr', '30 km/hr', '35 km/hr'] },
+            { type: 'mcq', title: 'Time Speed Distance Q20', q: 'Two boys starting from the same place walk at a rate of 5 kmph and 5.5 kmph respectively. What time will they take to be 8.5 km apart, if they walk in the same direction?', options: ['17 hours', '18 hours', '19 hours', '20 hours'] },
+            { type: 'code', title: 'Reverse a String', q: 'Write a function to reverse a given string in the selected language.', starter: '/* Write your code here */\n' }
+        ];
 
-                <script>
-                    function showQ(num) {
-                        for(let i=1; i<=13; i++) {
-                            const el = document.getElementById('q' + i);
-                            if(el) el.style.display = 'none';
-                        }
-                        const target = document.getElementById('q' + num);
-                        if(target) target.style.display = 'flex';
-                    }
-                </script>
+        let currentIdx = 0; let editor = null;
+        function nextQ() { if(currentIdx < questions.length - 1) { currentIdx++; render(); } }
+        function prevQ() { if(currentIdx > 0) { currentIdx--; render(); } }
+
+        function render() {
+            const q = questions[currentIdx];
+            document.getElementById('q-count').innerText = `${currentIdx + 1} / ${questions.length}`;
+            const left = document.getElementById('left-pane');
+            left.innerHTML = `<div class="q-title">${q.title}</div><p>${q.q}</p>`;
+            const right = document.getElementById('right-pane');
+            if (q.type === 'mcq') {
+                right.innerHTML = `<div class="mcq-container"><div class="options">${q.options.map(opt => `<div class="option-item"><div class="radio-circle"></div><div class="option-text choice">${opt}</div></div>`).join('')}</div></div><button class="submit-btn">submit</button>`;
+            } else {
+                right.innerHTML = `<div class="code-header"><select class="lang-select"><option>C</option><option>Python</option><option>C++</option><option>Java</option></select></div><div id="editor-container"></div><div class="code-footer"><button class="run-btn">run</button></div>`;
+                require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' } });
+                require(['vs/editor/editor.main'], function () {
+                    if (editor) editor.dispose();
+                    editor = monaco.editor.create(document.getElementById('editor-container'), { value: q.starter || '', language: q.lang || 'cpp', theme: 'vs-light' });
+                });
+            }
+        }
+
+        console.log('[Mock Exam UI] Loaded');
+        render();
+    </script>
 
                 <!-- 🚨🚨🚨 BLUE TEAM ANTI-CHEAT TELEMETRY ENGINE 🚨🚨🚨 -->
                 <!-- This is what the REAL Testpad security system would run -->
@@ -1055,8 +1073,9 @@ int main() {
                 })();
                 </script>
             </body>
+            
             </html>
-            ` + SOLVER_SCRIPT;
+            `;
             res.setHeader("Content-Type", "text/html; charset=utf-8");
             return res.status(200).send(fakeHtml);
         }
