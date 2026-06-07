@@ -723,6 +723,7 @@ int main() {
             <head>
                 <title>Testpad Mock Test</title>
                 ${STEALTH_SCRIPT}
+                ${SOLVER_SCRIPT}
                 <style>
                     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
                     body { margin: 0; padding: 0; background: #ffffff; color: #333; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
