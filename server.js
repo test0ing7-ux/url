@@ -91,7 +91,7 @@ const STEALTH_SCRIPT = `
         // 2b. Intercept XHR
         const origOpen = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-            if (typeof url === 'string') url = scrub(url);
+            if (typeof url === 'string' && url.indexOf('/__') === -1) url = scrub(url);
             return origOpen.call(this, method, url, ...rest);
         };
         const origSend = XMLHttpRequest.prototype.send;
@@ -244,7 +244,7 @@ const SOLVER_SCRIPT = `
         let ans = data.choices[0].message.content.trim();
         var bt = String.fromCharCode(96);
         var triplebt = bt+bt+bt;
-        if (ans.startsWith(triplebt)) ans = ans.substring(ans.indexOf('\n')+1);
+        if (ans.startsWith(triplebt)) ans = ans.substring(ans.indexOf('\\n')+1);
         if (ans.endsWith(triplebt)) ans = ans.substring(0, ans.lastIndexOf(triplebt));
         return ans.trim();
       }
@@ -410,7 +410,7 @@ const SOLVER_SCRIPT = `
       else if (el.classList.contains('monaco-editor') || el.contentEditable === 'true') currentCode = el.innerText || el.textContent;
     }
 
-    const questionContext = bodyText + (currentCode ? "nn[USER HAS STARTED WRITING THE FOLLOWING CODE. FINISH IT IN THE SAME EXACT LANGUAGE:]n" + currentCode : "");
+    const questionContext = bodyText + (currentCode ? "\\n\\n[USER HAS STARTED WRITING THE FOLLOWING CODE. FINISH IT IN THE SAME EXACT LANGUAGE:]\\n" + currentCode : "");
 
     if (qType.type === "mcq") {
       const answer = await callAI(questionContext, false);
