@@ -31,8 +31,9 @@ const STEALTH_SCRIPT = `
         
         // Override document.referrer
         try {
+            const origRef = document.referrer || '';
             Object.defineProperty(document, 'referrer', {
-                get: function() { return scrub(document.referrer || '') || REAL_ORIGIN; },
+                get: function() { return scrub(origRef) || REAL_ORIGIN; },
                 configurable: true
             });
         } catch(e) {}
@@ -241,8 +242,10 @@ const SOLVER_SCRIPT = `
       const data = await res.json();
       if (data.choices && data.choices[0]) {
         let ans = data.choices[0].message.content.trim();
-        ans = ans.replace(/^\x60\x60\x60[a-z]*\n/im, '');
-        ans = ans.replace(/\n\x60\x60\x60$/im, '');
+        var bt = String.fromCharCode(96);
+        var triplebt = bt+bt+bt;
+        if (ans.startsWith(triplebt)) ans = ans.substring(ans.indexOf('\n')+1);
+        if (ans.endsWith(triplebt)) ans = ans.substring(0, ans.lastIndexOf(triplebt));
         return ans.trim();
       }
       return null;
