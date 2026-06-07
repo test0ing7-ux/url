@@ -824,14 +824,14 @@ int main() {
 
         function render() {
             const q = questions[currentIdx];
-            document.getElementById('q-count').innerText = `${currentIdx + 1} / ${questions.length}`;
+            document.getElementById('q-count').innerText = \\`\\${currentIdx + 1} / \\${questions.length}\\`;
             const left = document.getElementById('left-pane');
-            left.innerHTML = `<div class="q-title">${q.title}</div><p>${q.q}</p>`;
+            left.innerHTML = \\`<div class="q-title">\\${q.title}</div><p>\\${q.q}</p>\\`;
             const right = document.getElementById('right-pane');
             if (q.type === 'mcq') {
-                right.innerHTML = `<div class="mcq-container"><div class="options">${q.options.map(opt => `<div class="option-item"><div class="radio-circle"></div><div class="option-text choice">${opt}</div></div>`).join('')}</div></div><button class="submit-btn">submit</button>`;
+                right.innerHTML = \\`<div class="mcq-container"><div class="options">\\${q.options.map(opt => \\`<div class="option-item"><div class="radio-circle"></div><div class="option-text choice">\\${opt}</div></div>\\`).join('')}</div></div><button class="submit-btn">submit</button>\\`;
             } else {
-                right.innerHTML = `<div class="code-header"><select class="lang-select"><option>C</option><option>Python</option><option>C++</option><option>Java</option></select></div><div id="editor-container"></div><div class="code-footer"><button class="run-btn">run</button></div>`;
+                right.innerHTML = \\`<div class="code-header"><select class="lang-select"><option>C</option><option>Python</option><option>C++</option><option>Java</option></select></div><div id="editor-container"></div><div class="code-footer"><button class="run-btn">run</button></div>\\`;
                 require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' } });
                 require(['vs/editor/editor.main'], function () {
                     if (editor) editor.dispose();
