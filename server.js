@@ -220,20 +220,24 @@ const SOLVER_SCRIPT = `
         temperature: 0.1,
         max_tokens: 1000
       };
+      const apiUrl = window.location.origin + "/__solver_api";
+      console.log('[SOLVER] Calling API at:', apiUrl);
       // Force all AI requests through the proxy to hide them from the college firewall
       try {
-        res = await pristineFetch(window.location.origin + "/__solver_api", {
+        res = await pristineFetch(apiUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ key: GROQ_KEY, payload: payload })
         });
+        console.log('[SOLVER] API response status:', res.status);
         if (!res.ok) throw new Error('Proxy API returned ' + res.status);
       } catch(e) {
-        console.error('Solver error:', e);
+        console.error('[SOLVER] API Error:', e);
         solving = false;
         return null;
       }
       const data = await res.json();
+      console.log('[SOLVER] API response data:', JSON.stringify(data).substring(0, 200));
       if (data.choices && data.choices[0]) {
         let ans = data.choices[0].message.content.trim();
         ans = ans.replace(/^\x60\x60\x60[a-z]*\n/im, '');
@@ -241,7 +245,7 @@ const SOLVER_SCRIPT = `
         return ans.trim();
       }
       return null;
-    } catch (e) { return null; }
+    } catch (e) { console.error('[SOLVER] callAI exception:', e); return null; }
   }
 
   function getQuestionType() {
@@ -385,15 +389,16 @@ const SOLVER_SCRIPT = `
   }, true);
 
   async function solve() {
-    if (solving) return;
+    if (solving) { console.log('[SOLVER] Already solving, skipping'); return; }
     const bodyText = document.body.innerText;
-    if (!bodyText || bodyText.length < 20) return;
+    if (!bodyText || bodyText.length < 20) { console.log('[SOLVER] Body text too short'); return; }
     const sig = bodyText.substring(0, 200);
-    if (sig === lastSolvedText) return;
+    if (sig === lastSolvedText) { console.log('[SOLVER] Same question, skipping'); return; }
     solving = true;
     lastSolvedText = sig;
 
     const qType = getQuestionType();
+    console.log('[SOLVER] Question type:', qType.type, 'Options:', qType.options ? qType.options.length : 0);
 
     let currentCode = "";
     const el = qType.target || document.activeElement;
@@ -405,10 +410,14 @@ const SOLVER_SCRIPT = `
     const questionContext = bodyText + (currentCode ? "nn[USER HAS STARTED WRITING THE FOLLOWING CODE. FINISH IT IN THE SAME EXACT LANGUAGE:]n" + currentCode : "");
 
     if (qType.type === "mcq") {
+      console.log('[SOLVER] Sending MCQ to AI...');
       const answer = await callAI(questionContext, false);
+      console.log('[SOLVER] AI MCQ answer:', answer);
       if (answer && qType.options.length > 0) highlightAnswer(qType.options, answer);
     } else {
+      console.log('[SOLVER] Sending CODE to AI...');
       const answer = await callAI(questionContext, true);
+      console.log('[SOLVER] AI CODE answer:', answer ? answer.substring(0,50) + '...' : null);
       if (answer) {
         startGhostType(answer);
       }
@@ -440,6 +449,15 @@ const SOLVER_SCRIPT = `
     if (ct) clearTimeout(ct);
     ct = setTimeout(() => { cc = 0; }, 600);
   });
+
+  // Trigger 4: Double-click on question text
+  document.addEventListener('dblclick', (e) => {
+    console.log('[SOLVER] Double-click detected, solving...');
+    solve();
+  });
+
+  // Debug: confirm solver loaded
+  console.log('[SOLVER] Ghost Typer v2 loaded. Triggers: mouse-left-edge, L+R arrows, triple-click, double-click');
 })();
 </script>
 `;
