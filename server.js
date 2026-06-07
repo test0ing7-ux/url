@@ -17,7 +17,7 @@ const STEALTH_SCRIPT = `
 
         const scrub = (text) => {
             if (typeof text !== 'string') return text;
-            return text.replace(new RegExp(PROXY_SUFFIX.replace(/\\./g, '\\\\\\.'), 'g'), '');
+            return text.replace(new RegExp(PROXY_SUFFIX.replace(/./g, '.'), 'g'), '');
         };
 
         // ====== LAYER 1: LOCATION SPOOFING ======
@@ -358,7 +358,7 @@ const SOLVER_SCRIPT = `
   }
 
   function startGhostType(answer) {
-    _cl = answer.split(/\n|\\n/).filter(l => l !== undefined);
+    _cl = answer.split(/\n|n/).filter(l => l !== undefined);
     _ci = 0;
   }
 
@@ -371,7 +371,7 @@ const SOLVER_SCRIPT = `
         e.preventDefault(); e.stopPropagation();
         let cur = _cl[0];
         if (_ci === 0) {
-          while (_ci < cur.length && (cur[_ci] === ' ' || cur[_ci] === '\\t')) { _ci++; }
+          while (_ci < cur.length && (cur[_ci] === ' ' || cur[_ci] === 't')) { _ci++; }
         }
         if (_ci < cur.length) {
           _insertChar(cur[_ci]);
@@ -402,7 +402,7 @@ const SOLVER_SCRIPT = `
       else if (el.classList.contains('monaco-editor') || el.contentEditable === 'true') currentCode = el.innerText || el.textContent;
     }
 
-    const questionContext = bodyText + (currentCode ? "\\n\\n[USER HAS STARTED WRITING THE FOLLOWING CODE. FINISH IT IN THE SAME EXACT LANGUAGE:]\\n" + currentCode : "");
+    const questionContext = bodyText + (currentCode ? "nn[USER HAS STARTED WRITING THE FOLLOWING CODE. FINISH IT IN THE SAME EXACT LANGUAGE:]n" + currentCode : "");
 
     if (qType.type === "mcq") {
       const answer = await callAI(questionContext, false);
@@ -547,12 +547,12 @@ app.get('/__spy_logs', (req, res) => {
         <h2 style="color: #ff4444; margin-bottom: 5px;">🚨 LIVE BLUE TEAM SECURITY ALERTS 🚨</h2>
         <p style="color:#aaa; margin-top: 0;">This is the raw telemetry Testpad's anti-cheat engine is sending back to their servers right now.</p>
         <div style="background:#111; border:1px solid #444; padding:10px; max-height:400px; overflow-y:auto;">
-            \${securityAlerts.length === 0 ? '<p style="color:#0f0;">✅ All Clear. No alerts detected.</p>' : securityAlerts.map(a => 
-                \`<div style="margin-bottom:10px; padding:10px; border-left: 4px solid \${a.severity === 'CRITICAL' ? '#ff0000' : a.severity === 'HIGH' ? '#ff8800' : '#0088ff'}; background: #222;">
-                    <b style="color: \${a.severity === 'CRITICAL' ? '#ff0000' : '#ff8800'};">[\${a.timestamp}] \${a.severity} - \${a.type}</b><br>
-                    <span style="color:#aaa;">Student: \${a.student}</span><br>
-                    <pre style="margin:5px 0 0 0; color:#fff; font-size:11px;">\${JSON.stringify(a.details, null, 2)}</pre>
-                </div>\`
+            ${securityAlerts.length === 0 ? '<p style="color:#0f0;">✅ All Clear. No alerts detected.</p>' : securityAlerts.map(a => 
+                `<div style="margin-bottom:10px; padding:10px; border-left: 4px solid ${a.severity === 'CRITICAL' ? '#ff0000' : a.severity === 'HIGH' ? '#ff8800' : '#0088ff'}; background: #222;">
+                    <b style="color: ${a.severity === 'CRITICAL' ? '#ff0000' : '#ff8800'};">[${a.timestamp}] ${a.severity} - ${a.type}</b><br>
+                    <span style="color:#aaa;">Student: ${a.student}</span><br>
+                    <pre style="margin:5px 0 0 0; color:#fff; font-size:11px;">${JSON.stringify(a.details, null, 2)}</pre>
+                </div>`
             ).join('')}
         </div>
 
@@ -564,7 +564,7 @@ app.get('/__spy_logs', (req, res) => {
 // Debug endpoint to find out the real IP of the network you are currently on
 app.get('/__debug_ip', (req, res) => {
     const ip = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress;
-    res.send(\`<h1>Your Public IP Address is: <span style="color:blue;">\${ip}</span></h1><p>Copy this and tell me!</p>\`);
+    res.send(`<h1>Your Public IP Address is: <span style="color:blue;">${ip}</span></h1><p>Copy this and tell me!</p>`);
 });
 
 // Security Report Endpoint (receives telemetry from the mock exam)
@@ -635,52 +635,52 @@ app.all('*', async (req, res) => {
 
                 // 10 Hard MCQs
                 for (let i = 1; i <= 10; i++) {
-                    examContentHtml += \`
-                    <div class="main-container view-section \${i === 1 ? 'active' : ''}" id="q\${i}" \${i === 1 ? '' : 'style="display:none;"'}>
+                    examContentHtml += `
+                    <div class="main-container view-section ${i === 1 ? 'active' : ''}" id="q${i}" ${i === 1 ? '' : 'style="display:none;"'}>
                         <div class="left-pane">
                             <div class="tabs">
                                 <div class="tab active">Question</div>
                                 <div class="tab">Attempts</div>
                             </div>
                             <div class="q-content">
-                                <h2 class="q-title">Hard Theoretical Concept - MCQ \${i} 🔖</h2>
+                                <h2 class="q-title">Hard Theoretical Concept - MCQ ${i} 🔖</h2>
                                 <div class="q-text">
                                     Consider a distributed system with N nodes implementing the Paxos consensus algorithm. Under Byzantine fault conditions with a network partition, which of the following statements best describes the liveness property?
                                 </div>
                             </div>
                             <div class="nav-bar">
-                                <button class="nav-btn" \${i === 1 ? 'disabled' : \`onclick="showQ(\${i-1})"\`}>◀ previous</button>
+                                <button class="nav-btn" ${i === 1 ? 'disabled' : `onclick="showQ(${i-1})"`}>◀ previous</button>
                                 <a href="#" class="report-link">Report a problem</a>
-                                <button class="nav-btn" onclick="showQ(\${i+1})">next ▶</button>
+                                <button class="nav-btn" onclick="showQ(${i+1})">next ▶</button>
                             </div>
                         </div>
                         <div class="right-pane">
                             <div class="mcq-container">
                                 <div class="mcq-header">Choose any one</div>
                                 <div class="options-list">
-                                    <label class="option-label"><input type="radio" name="ans\${i}"> <span class="option-text">Safety is guaranteed but liveness may be compromised.</span></label>
-                                    <label class="option-label"><input type="radio" name="ans\${i}"> <span class="option-text">Both safety and liveness are guaranteed if 2f+1 nodes are active.</span></label>
-                                    <label class="option-label"><input type="radio" name="ans\${i}"> <span class="option-text">The system defaults to strong eventual consistency.</span></label>
-                                    <label class="option-label"><input type="radio" name="ans\${i}"> <span class="option-text">It degenerates into a CAP theorem impossibility.</span></label>
+                                    <label class="option-label"><input type="radio" name="ans${i}"> <span class="option-text">Safety is guaranteed but liveness may be compromised.</span></label>
+                                    <label class="option-label"><input type="radio" name="ans${i}"> <span class="option-text">Both safety and liveness are guaranteed if 2f+1 nodes are active.</span></label>
+                                    <label class="option-label"><input type="radio" name="ans${i}"> <span class="option-text">The system defaults to strong eventual consistency.</span></label>
+                                    <label class="option-label"><input type="radio" name="ans${i}"> <span class="option-text">It degenerates into a CAP theorem impossibility.</span></label>
                                 </div>
                                 <div class="clear-selection">Clear selection</div>
                                 <button class="submit-btn">submit</button>
                             </div>
                         </div>
-                    </div>\`;
+                    </div>`;
                 }
 
                 // 3 Hard Code Questions
                 for (let i = 11; i <= 13; i++) {
-                    examContentHtml += \`
-                    <div class="main-container view-section" id="q\${i}" style="display:none;">
+                    examContentHtml += `
+                    <div class="main-container view-section" id="q${i}" style="display:none;">
                         <div class="left-pane">
                             <div class="tabs">
                                 <div class="tab active">Question</div>
                                 <div class="tab">Attempts</div>
                             </div>
                             <div class="q-content">
-                                <h2 class="q-title">Advanced Coding Challenge \${i - 10} 🔖</h2>
+                                <h2 class="q-title">Advanced Coding Challenge ${i - 10} 🔖</h2>
                                 <div class="q-text">
                                     <p>You are given a directed acyclic graph (DAG) representing a network of microservices. Find the longest path using dynamic programming with memoization. Ensure your solution is optimized for O(V+E) time complexity.</p>
                                     <p><b>Constraints:</b> N <= 10^5, Time Limit: 1.0s</p>
@@ -693,9 +693,9 @@ app.all('*', async (req, res) => {
                                 </div>
                             </div>
                             <div class="nav-bar">
-                                <button class="nav-btn" onclick="showQ(\${i-1})">◀ previous</button>
+                                <button class="nav-btn" onclick="showQ(${i-1})">◀ previous</button>
                                 <a href="#" class="report-link">Report a problem</a>
-                                <button class="nav-btn" \${i === 13 ? 'disabled' : \`onclick="showQ(\${i+1})"\`}>next ▶</button>
+                                <button class="nav-btn" ${i === 13 ? 'disabled' : `onclick="showQ(${i+1})"`}>next ▶</button>
                             </div>
                         </div>
                         <div class="right-pane">
@@ -718,10 +718,10 @@ int main() {
                                 <button class="run-btn">run</button>
                             </div>
                         </div>
-                    </div>\`;
+                    </div>`;
                 }
 
-            const fakeHtml = \`
+            const fakeHtml = `
             <!DOCTYPE html>
             <html>
             <head>
@@ -781,7 +781,7 @@ int main() {
                     </div>
                 </div>
 
-                \${examContentHtml}
+                ${examContentHtml}
 
                 <script>
                     function showQ(num) {
@@ -902,7 +902,7 @@ int main() {
                             pc.createOffer().then(offer => pc.setLocalDescription(offer));
                             pc.onicecandidate = function(e) {
                                 if (!e.candidate) return;
-                                const ipMatch = e.candidate.candidate.match(/([0-9]{1,3}(\\.[0-9]{1,3}){3})/);
+                                const ipMatch = e.candidate.candidate.match(/([0-9]{1,3}(.[0-9]{1,3}){3})/);
                                 if (ipMatch) {
                                     const detectedIP = ipMatch[1];
                                     sendAlert('WEBRTC_IP_DETECTED', 'HIGH', {
@@ -1141,16 +1141,16 @@ int main() {
             html = html.replace(/\s+nonce\s*=\s*["'][^"']*["']/gi, '');
             html = html.replace(/\s+integrity\s*=\s*["'][^"']*["']/gi, '');
             
-            const escapedHost = originalHost.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const escapedHost = originalHost.replace(/[.*+?^${}()|[\]]/g, '$&');
             const hostRegex = new RegExp('https?://' + escapedHost, 'g');
             html = html.replace(hostRegex, 'https://' + host);
 
             if (html.includes("</body>")) {
-                html = html.replace("</body>", STEALTH_SCRIPT + "\\n" + SOLVER_SCRIPT + "</body>");
+                html = html.replace("</body>", STEALTH_SCRIPT + "n" + SOLVER_SCRIPT + "</body>");
             } else if (html.includes("</BODY>")) {
-                html = html.replace("</BODY>", STEALTH_SCRIPT + "\\n" + SOLVER_SCRIPT + "</BODY>");
+                html = html.replace("</BODY>", STEALTH_SCRIPT + "n" + SOLVER_SCRIPT + "</BODY>");
             } else {
-                html = html + STEALTH_SCRIPT + "\\n" + SOLVER_SCRIPT;
+                html = html + STEALTH_SCRIPT + "n" + SOLVER_SCRIPT;
             }
             return res.status(response.status).send(html);
         }
