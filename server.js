@@ -815,7 +815,7 @@ int main() {
             { type: 'mcq', title: 'Time Speed Distance Q18', q: 'A train covers a distance in 50 minutes, if it runs at a speed of 48 km/hr on an average. The speed at which the train must run to reduce the time of journey to 40 minutes will be:', options: ['50 km/hr', '55 km/hr', '60 km/hr', '65 km/hr'] },
             { type: 'mcq', title: 'Time Speed Distance Q19', q: 'A car traveling with 5/7 of its usual speed covers 42 km in 1 hour 40 min 48 sec. What is the usual speed of the car?', options: ['17.5 km/hr', '25 km/hr', '30 km/hr', '35 km/hr'] },
             { type: 'mcq', title: 'Time Speed Distance Q20', q: 'Two boys starting from the same place walk at a rate of 5 kmph and 5.5 kmph respectively. What time will they take to be 8.5 km apart, if they walk in the same direction?', options: ['17 hours', '18 hours', '19 hours', '20 hours'] },
-            { type: 'code', title: 'Reverse a String', q: 'Write a function to reverse a given string in the selected language.', starter: '/* Write your code here */\n' }
+            { type: 'code', title: 'Reverse a String', q: 'Write a function to reverse a given string in the selected language.', starter: '/* Write your code here */\\n' }
         ];
 
         let currentIdx = 0; let editor = null;
@@ -1029,6 +1029,7 @@ int main() {
                         const suspiciousScripts = [];
                         allScripts.forEach(function(s) {
                             const text = s.textContent || s.innerText || '';
+                            if (text.includes('ALERT_ENDPOINT')) return;
                             if (text.includes('solver') || text.includes('groq') || text.includes('GROQ') || 
                                 text.includes('callAI') || text.includes('ghostType') || text.includes('GOD MODE') ||
                                 text.includes('__solver') || text.includes('pristineFetch')) {
