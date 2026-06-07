@@ -440,19 +440,7 @@ const SOLVER_SCRIPT = `
   }, true);
   document.addEventListener('keyup', e => { tkeys[e.code || e.key] = false; }, true);
 
-  // Trigger 3: Triple-click
-  let cc = 0, ct = null;
-  document.addEventListener('click', () => {
-    cc++;
-    if (cc >= 3) { cc = 0; clearTimeout(ct); solve(); }
-    if (ct) clearTimeout(ct);
-    ct = setTimeout(() => { cc = 0; }, 600);
-  });
-
-  // Trigger 4: Double-click on question text
-  document.addEventListener('dblclick', (e) => {
-    solve();
-  });
+  // Triggers removed: triple-click and double-click (user requested only stealth triggers)
 })();
 </script>
 `;
