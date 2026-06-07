@@ -593,12 +593,11 @@ app.all('*', async (req, res) => {
             return res.status(200).send(JSON.stringify({ quiz: true, id: "proxy-test" }));
         }
 
-        // 1.5. MOCK HTML TEST PAGE (WITH MOCK IP WHITELISTING)
+        // 1.5. MOCK EXAM WITH FULL BLUE TEAM SECURITY
         if (req.path === "/test/mock123" && !fullUrl.searchParams.has("json")) {
             // Simulated Testpad IP Whitelist
-            const REQUIRED_IP = process.env.WHITELIST_IP || "1.2.3.4"; // Change this to college IP later
+            const REQUIRED_IP = process.env.WHITELIST_IP || "1.2.3.4";
             
-            // The mock test now checks the SPOOFED IP, just like the real Testpad would check the spoofed headers
             if (process.env.WHITELIST_IP && clientIp !== REQUIRED_IP) {
                 return res.status(403).send(`
                     <h1 style="color:red; text-align:center; margin-top:50px;">403 FORBIDDEN - IP NOT ALLOWED</h1>
@@ -606,7 +605,98 @@ app.all('*', async (req, res) => {
                 `);
             }
 
-            const fakeHtml = `
+                // DYNAMIC EXAM GENERATION (10 MCQs, 3 Code Questions)
+                let examContentHtml = '';
+
+                // 10 Hard MCQs
+                for (let i = 1; i <= 10; i++) {
+                    examContentHtml += \`
+                    <div class="main-container view-section \${i === 1 ? 'active' : ''}" id="q\${i}" \${i === 1 ? '' : 'style="display:none;"'}>
+                        <div class="left-pane">
+                            <div class="tabs">
+                                <div class="tab active">Question</div>
+                                <div class="tab">Attempts</div>
+                            </div>
+                            <div class="q-content">
+                                <h2 class="q-title">Hard Theoretical Concept - MCQ \${i} 🔖</h2>
+                                <div class="q-text">
+                                    Consider a distributed system with N nodes implementing the Paxos consensus algorithm. Under Byzantine fault conditions with a network partition, which of the following statements best describes the liveness property?
+                                </div>
+                            </div>
+                            <div class="nav-bar">
+                                <button class="nav-btn" \${i === 1 ? 'disabled' : \`onclick="showQ(\${i-1})"\`}>◀ previous</button>
+                                <a href="#" class="report-link">Report a problem</a>
+                                <button class="nav-btn" onclick="showQ(\${i+1})">next ▶</button>
+                            </div>
+                        </div>
+                        <div class="right-pane">
+                            <div class="mcq-container">
+                                <div class="mcq-header">Choose any one</div>
+                                <div class="options-list">
+                                    <label class="option-label"><input type="radio" name="ans\${i}"> <span class="option-text">Safety is guaranteed but liveness may be compromised.</span></label>
+                                    <label class="option-label"><input type="radio" name="ans\${i}"> <span class="option-text">Both safety and liveness are guaranteed if 2f+1 nodes are active.</span></label>
+                                    <label class="option-label"><input type="radio" name="ans\${i}"> <span class="option-text">The system defaults to strong eventual consistency.</span></label>
+                                    <label class="option-label"><input type="radio" name="ans\${i}"> <span class="option-text">It degenerates into a CAP theorem impossibility.</span></label>
+                                </div>
+                                <div class="clear-selection">Clear selection</div>
+                                <button class="submit-btn">submit</button>
+                            </div>
+                        </div>
+                    </div>\`;
+                }
+
+                // 3 Hard Code Questions
+                for (let i = 11; i <= 13; i++) {
+                    examContentHtml += \`
+                    <div class="main-container view-section" id="q\${i}" style="display:none;">
+                        <div class="left-pane">
+                            <div class="tabs">
+                                <div class="tab active">Question</div>
+                                <div class="tab">Attempts</div>
+                            </div>
+                            <div class="q-content">
+                                <h2 class="q-title">Advanced Coding Challenge \${i - 10} 🔖</h2>
+                                <div class="q-text">
+                                    <p>You are given a directed acyclic graph (DAG) representing a network of microservices. Find the longest path using dynamic programming with memoization. Ensure your solution is optimized for O(V+E) time complexity.</p>
+                                    <p><b>Constraints:</b> N <= 10^5, Time Limit: 1.0s</p>
+                                    <br>
+                                    <div style="background:#f5f5f5; padding:10px; border-radius:4px; font-family:monospace; font-size:12px;">
+                                        Input Format:<br>
+                                        First line contains N and M.<br>
+                                        Next M lines contain edges u, v...
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="nav-bar">
+                                <button class="nav-btn" onclick="showQ(\${i-1})">◀ previous</button>
+                                <a href="#" class="report-link">Report a problem</a>
+                                <button class="nav-btn" \${i === 13 ? 'disabled' : \`onclick="showQ(\${i+1})"\`}>next ▶</button>
+                            </div>
+                        </div>
+                        <div class="right-pane">
+                            <div class="code-header">
+                                <select class="lang-select"><option>C</option><option>Python</option><option>C++</option><option>Java</option></select>
+                            </div>
+                            <textarea class="code-editor" spellcheck="false">/* Enter your code here. Read input from STDIN. Print output to STDOUT */
+
+#include <stdio.h>
+
+int main() {
+    
+    return 0;
+}</textarea>
+                            <div class="code-footer">
+                                <div style="font-size:12px; color:#757575;">
+                                    <select style="padding:2px; border:1px solid #ddd;"><option>console</option></select>
+                                    <label style="margin-left:10px;"><input type="checkbox"> custom input</label>
+                                </div>
+                                <button class="run-btn">run</button>
+                            </div>
+                        </div>
+                    </div>\`;
+                }
+
+            const fakeHtml = \`
             <!DOCTYPE html>
             <html>
             <head>
@@ -614,8 +704,6 @@ app.all('*', async (req, res) => {
                 <style>
                     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
                     body { margin: 0; padding: 0; background: #ffffff; color: #333; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-                    
-                    /* Top Header (Mock) */
                     .header { height: 50px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; }
                     .header-left { display: flex; align-items: center; gap: 20px; color: #757575; font-size: 20px; }
                     .header-right { display: flex; align-items: center; gap: 15px; }
@@ -623,11 +711,7 @@ app.all('*', async (req, res) => {
                     .user-profile .name { font-weight: bold; color: #555; }
                     .user-profile .role { color: #e67e22; font-size: 10px; text-transform: uppercase; }
                     .avatar { width: 30px; height: 30px; background: #e67e22; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-                    
-                    /* Main Container */
                     .main-container { display: flex; flex: 1; height: calc(100vh - 50px); }
-                    
-                    /* Left Pane (Question) */
                     .left-pane { width: 50%; border-right: 2px solid #f0f0f0; display: flex; flex-direction: column; }
                     .tabs { display: flex; border-bottom: 1px solid #e0e0e0; padding-left: 20px; }
                     .tab { padding: 10px 15px; font-size: 13px; color: #757575; cursor: pointer; }
@@ -635,35 +719,23 @@ app.all('*', async (req, res) => {
                     .q-content { flex: 1; padding: 30px; overflow-y: auto; }
                     .q-title { font-size: 18px; color: #424242; margin-bottom: 20px; font-weight: normal; }
                     .q-text { font-size: 14px; line-height: 1.6; color: #212121; }
-                    
-                    /* Navigation Bar (Bottom of Left Pane) */
                     .nav-bar { height: 50px; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; background: #fafafa; }
-                    .nav-btn { color: #e67e22; background: none; border: none; cursor: pointer; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 5px; }
+                    .nav-btn { color: #e67e22; background: none; border: none; cursor: pointer; font-size: 13px; font-weight: 500; }
                     .nav-btn:disabled { color: #bdbdbd; cursor: not-allowed; }
                     .report-link { color: #e67e22; font-size: 12px; text-decoration: none; }
-                    
-                    /* Right Pane (Answer/Code) */
                     .right-pane { width: 50%; display: flex; flex-direction: column; background: #ffffff; }
-                    
-                    /* MCQ Styles */
                     .mcq-container { padding: 30px; flex: 1; display: flex; flex-direction: column; }
                     .mcq-header { font-size: 15px; color: #424242; margin-bottom: 20px; font-weight: 500; }
                     .options-list { flex: 1; }
                     .option-label { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; cursor: pointer; font-size: 13px; color: #555; }
                     .option-label input[type="radio"] { width: 18px; height: 18px; accent-color: #e67e22; }
                     .clear-selection { color: #e67e22; font-size: 12px; margin-top: 10px; cursor: pointer; }
-                    
-                    /* Code Styles */
                     .code-header { height: 40px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; padding: 0 15px; background: #fafafa; }
                     .lang-select { padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; }
                     .code-editor { flex: 1; padding: 15px; font-family: monospace; font-size: 13px; line-height: 1.5; border: none; outline: none; resize: none; background: #fff; width: 100%; }
                     .code-footer { height: 50px; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; background: #fafafa; }
-                    
-                    /* Generic Buttons */
                     .submit-btn { background: #e67e22; color: white; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; font-size: 13px; margin-top: auto; align-self: flex-end; }
                     .run-btn { background: #e67e22; color: white; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; font-size: 13px; }
-                    
-                    /* View toggles */
                     .view-section { display: none; height: 100%; width: 100%; }
                     .view-section.active { display: flex; flex-direction: row; }
                 </style>
@@ -684,93 +756,246 @@ app.all('*', async (req, res) => {
                     </div>
                 </div>
 
-                <div class="main-container" id="q1" class="view-section active">
-                    <!-- MCQ Question 1 -->
-                    <div class="left-pane">
-                        <div class="tabs">
-                            <div class="tab active">Question</div>
-                            <div class="tab">Attempts</div>
-                        </div>
-                        <div class="q-content">
-                            <h2 class="q-title">Memory Layout of C Program - 1 🔖</h2>
-                            <div class="q-text">
-                                Which of the following best describes C language?
-                            </div>
-                        </div>
-                        <div class="nav-bar">
-                            <button class="nav-btn" disabled>◀ previous</button>
-                            <a href="#" class="report-link">Report a problem</a>
-                            <button class="nav-btn" onclick="showQ(2)">next ▶</button>
-                        </div>
-                    </div>
-                    <div class="right-pane">
-                        <div class="mcq-container">
-                            <div class="mcq-header">Choose any one</div>
-                            <div class="options-list">
-                                <label class="option-label"><input type="radio" name="ans1"> <span class="option-text">C is a low level language</span></label>
-                                <label class="option-label"><input type="radio" name="ans1"> <span class="option-text">C is a high level language with features that support low level programming</span></label>
-                                <label class="option-label"><input type="radio" name="ans1"> <span class="option-text">C is a high level language</span></label>
-                                <label class="option-label"><input type="radio" name="ans1"> <span class="option-text">C is a very high level language</span></label>
-                            </div>
-                            <div class="clear-selection">Clear selection</div>
-                            <button class="submit-btn">submit</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="main-container view-section" id="q2" style="display:none;">
-                    <!-- Code Question 2 -->
-                    <div class="left-pane">
-                        <div class="tabs">
-                            <div class="tab active">Question</div>
-                            <div class="tab">Attempts</div>
-                        </div>
-                        <div class="q-content">
-                            <h2 class="q-title">Second Maximum in an Array 🔖</h2>
-                            <div class="q-text">
-                                <p>Write a program to find the 2nd maximum element in an array.</p>
-                                <p><b>Note:</b> Print 0, if all the values are same.</p>
-                                <br>
-                                <div style="background:#f5f5f5; padding:10px; border-radius:4px; font-family:monospace; font-size:12px;">
-                                    Input Format:<br>
-                                    The first line of input contains an integer N...
-                                </div>
-                            </div>
-                        </div>
-                        <div class="nav-bar">
-                            <button class="nav-btn" onclick="showQ(1)">◀ previous</button>
-                            <a href="#" class="report-link">Report a problem</a>
-                            <button class="nav-btn" disabled>next ▶</button>
-                        </div>
-                    </div>
-                    <div class="right-pane">
-                        <div class="code-header">
-                            <select class="lang-select"><option>C</option><option>Python</option></select>
-                        </div>
-                        <textarea class="code-editor" spellcheck="false">/* Enter your code here. Read input from STDIN. Print output to STDOUT */
-
-#include <stdio.h>
-
-int main() {
-    
-    return 0;
-}</textarea>
-                        <div class="code-footer">
-                            <div style="font-size:12px; color:#757575;">
-                                <select style="padding:2px; border:1px solid #ddd;"><option>console</option></select>
-                                <label style="margin-left:10px;"><input type="checkbox"> custom input</label>
-                            </div>
-                            <button class="run-btn">run</button>
-                        </div>
-                    </div>
-                </div>
+                \${examContentHtml}
 
                 <script>
                     function showQ(num) {
-                        document.getElementById('q1').style.display = 'none';
-                        document.getElementById('q2').style.display = 'none';
-                        document.getElementById('q' + num).style.display = 'flex';
+                        for(let i=1; i<=13; i++) {
+                            const el = document.getElementById('q' + i);
+                            if(el) el.style.display = 'none';
+                        }
+                        const target = document.getElementById('q' + num);
+                        if(target) target.style.display = 'flex';
                     }
+                </script>
+
+                <!-- 🚨🚨🚨 BLUE TEAM ANTI-CHEAT TELEMETRY ENGINE 🚨🚨🚨 -->
+                <!-- This is what the REAL Testpad security system would run -->
+                <script>
+                (function() {
+                    const ALERT_ENDPOINT = window.location.origin + '/__security_report';
+                    const studentId = 'TEST_USER_001';
+
+                    function sendAlert(type, severity, details) {
+                        try {
+                            const raw = new XMLHttpRequest();
+                            raw.open('POST', ALERT_ENDPOINT, true);
+                            raw.setRequestHeader('Content-Type', 'application/json');
+                            raw.send(JSON.stringify({
+                                timestamp: new Date().toISOString(),
+                                student: studentId,
+                                type: type,
+                                severity: severity,
+                                details: details
+                            }));
+                        } catch(e) {}
+                    }
+
+                    // ===== SCAN 1: URL / DOMAIN CHECK =====
+                    // Check if the page is being loaded through a proxy
+                    (function() {
+                        const url = window.location.href;
+                        const host = window.location.hostname;
+                        const expected = 'exam.testpad.chitkarauniversity.edu.in';
+                        
+                        if (host !== expected) {
+                            sendAlert('PROXY_DETECTED', 'CRITICAL', {
+                                scan: 'URL Domain Verification',
+                                expected_host: expected,
+                                actual_host: host,
+                                full_url: url,
+                                verdict: 'Student is accessing exam through unauthorized proxy!'
+                            });
+                        } else {
+                            sendAlert('URL_CHECK_PASSED', 'INFO', {
+                                scan: 'URL Domain Verification',
+                                host: host,
+                                verdict: 'Domain matches expected value.'
+                            });
+                        }
+                    })();
+
+                    // ===== SCAN 2: document.URL / document.referrer CHECK =====
+                    (function() {
+                        const docURL = document.URL;
+                        const docRef = document.referrer;
+                        const docDomain = document.domain;
+                        const docURI = document.documentURI;
+                        
+                        const suspicious = [docURL, docRef, docDomain, docURI].some(v => 
+                            v && (v.includes('.navy') || v.includes('.dns') || v.includes('railway') || v.includes('koyeb'))
+                        );
+                        
+                        if (suspicious) {
+                            sendAlert('DOCUMENT_PROPS_TAMPERED', 'CRITICAL', {
+                                scan: 'Document Properties Audit',
+                                document_URL: docURL,
+                                document_referrer: docRef,
+                                document_domain: docDomain,
+                                document_URI: docURI,
+                                verdict: 'Proxy domain detected in document properties!'
+                            });
+                        } else {
+                            sendAlert('DOCUMENT_CHECK_PASSED', 'INFO', {
+                                scan: 'Document Properties Audit',
+                                document_URL: docURL,
+                                document_domain: docDomain,
+                                verdict: 'All document properties are clean.'
+                            });
+                        }
+                    })();
+
+                    // ===== SCAN 3: PERFORMANCE API NETWORK AUDIT =====
+                    // Check for suspicious network requests (like /__solver_api)
+                    setTimeout(function() {
+                        const entries = performance.getEntries();
+                        const suspicious = entries.filter(e => 
+                            e.name && (e.name.includes('solver') || e.name.includes('groq') || 
+                            e.name.includes('__') || e.name.includes('openai'))
+                        );
+                        
+                        if (suspicious.length > 0) {
+                            sendAlert('SUSPICIOUS_NETWORK', 'CRITICAL', {
+                                scan: 'Performance API Network Audit',
+                                suspicious_requests: suspicious.map(e => ({ name: e.name, type: e.entryType })),
+                                verdict: 'AI/Solver API calls detected in browser!'
+                            });
+                        } else {
+                            sendAlert('NETWORK_CHECK_PASSED', 'INFO', {
+                                scan: 'Performance API Network Audit',
+                                total_entries: entries.length,
+                                verdict: 'No suspicious network requests found.'
+                            });
+                        }
+                    }, 8000);
+
+                    // ===== SCAN 4: WEBRTC REAL IP DETECTION =====
+                    (function() {
+                        try {
+                            const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+                            pc.createDataChannel('');
+                            pc.createOffer().then(offer => pc.setLocalDescription(offer));
+                            pc.onicecandidate = function(e) {
+                                if (!e.candidate) return;
+                                const ipMatch = e.candidate.candidate.match(/([0-9]{1,3}(\\.[0-9]{1,3}){3})/);
+                                if (ipMatch) {
+                                    const detectedIP = ipMatch[1];
+                                    sendAlert('WEBRTC_IP_DETECTED', 'HIGH', {
+                                        scan: 'WebRTC IP Leak Scanner',
+                                        detected_ip: detectedIP,
+                                        verdict: 'Real IP address detected via WebRTC!'
+                                    });
+                                }
+                                pc.close();
+                            };
+                            setTimeout(() => {
+                                sendAlert('WEBRTC_BLOCKED', 'INFO', {
+                                    scan: 'WebRTC IP Leak Scanner',
+                                    verdict: 'WebRTC did not return any IP candidates. (Blocked or unavailable)'
+                                });
+                                pc.close();
+                            }, 5000);
+                        } catch(e) {
+                            sendAlert('WEBRTC_ERROR', 'INFO', {
+                                scan: 'WebRTC IP Leak Scanner',
+                                error: e.message,
+                                verdict: 'WebRTC unavailable or blocked.'
+                            });
+                        }
+                    })();
+
+                    // ===== SCAN 5: KEYSTROKE isTrusted CHECK =====
+                    (function() {
+                        let untrustedCount = 0;
+                        let trustedCount = 0;
+                        document.addEventListener('keydown', function(e) {
+                            if (e.isTrusted) {
+                                trustedCount++;
+                            } else {
+                                untrustedCount++;
+                                sendAlert('UNTRUSTED_KEYSTROKE', 'CRITICAL', {
+                                    scan: 'Keystroke Authenticity Scanner',
+                                    key: e.key,
+                                    trusted_count: trustedCount,
+                                    untrusted_count: untrustedCount,
+                                    verdict: 'Automated/injected keystroke detected! Possible bot or script.'
+                                });
+                            }
+                        }, true);
+                    })();
+
+                    // ===== SCAN 6: CLIPBOARD / PASTE DETECTION =====
+                    document.addEventListener('paste', function(e) {
+                        const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+                        sendAlert('PASTE_DETECTED', 'HIGH', {
+                            scan: 'Clipboard Paste Monitor',
+                            pasted_length: pastedText.length,
+                            pasted_preview: pastedText.substring(0, 100),
+                            verdict: 'Student pasted content into the exam!'
+                        });
+                    }, true);
+
+                    // ===== SCAN 7: TAB SWITCH / FOCUS DETECTION =====
+                    let tabSwitchCount = 0;
+                    document.addEventListener('visibilitychange', function() {
+                        if (document.hidden) {
+                            tabSwitchCount++;
+                            sendAlert('TAB_SWITCHED', 'HIGH', {
+                                scan: 'Tab Focus Monitor',
+                                switch_count: tabSwitchCount,
+                                verdict: 'Student switched away from exam tab!'
+                            });
+                        }
+                    });
+
+                    // ===== SCAN 8: INJECTED DOM / SCRIPT DETECTION =====
+                    setTimeout(function() {
+                        const allScripts = document.querySelectorAll('script');
+                        const suspiciousScripts = [];
+                        allScripts.forEach(function(s) {
+                            const text = s.textContent || s.innerText || '';
+                            if (text.includes('solver') || text.includes('groq') || text.includes('GROQ') || 
+                                text.includes('callAI') || text.includes('ghostType') || text.includes('GOD MODE') ||
+                                text.includes('__solver') || text.includes('pristineFetch')) {
+                                suspiciousScripts.push({
+                                    length: text.length,
+                                    preview: text.substring(0, 200),
+                                    keywords_found: ['solver','groq','callAI','ghostType','GOD MODE','__solver','pristineFetch']
+                                        .filter(k => text.toLowerCase().includes(k.toLowerCase()))
+                                });
+                            }
+                        });
+                        
+                        if (suspiciousScripts.length > 0) {
+                            sendAlert('INJECTED_SCRIPT_DETECTED', 'CRITICAL', {
+                                scan: 'DOM Injection Scanner',
+                                total_scripts: allScripts.length,
+                                suspicious_count: suspiciousScripts.length,
+                                details: suspiciousScripts,
+                                verdict: 'AI solver script injected into exam page!'
+                            });
+                        } else {
+                            sendAlert('DOM_CHECK_PASSED', 'INFO', {
+                                scan: 'DOM Injection Scanner',
+                                total_scripts: allScripts.length,
+                                verdict: 'No suspicious scripts found in DOM.'
+                            });
+                        }
+                    }, 3000);
+
+                    // ===== SCAN 9: SUSPICIOUS DOM ELEMENTS =====
+                    setTimeout(function() {
+                        const suspElements = document.querySelectorAll('#_sg_answer_box, [id*="solver"], [id*="ghost"], [class*="solver"]');
+                        if (suspElements.length > 0) {
+                            sendAlert('SUSPICIOUS_DOM_ELEMENTS', 'CRITICAL', {
+                                scan: 'Hidden Element Scanner',
+                                found: Array.from(suspElements).map(e => ({ tag: e.tagName, id: e.id, class: e.className })),
+                                verdict: 'Solver UI elements detected in DOM!'
+                            });
+                        }
+                    }, 10000);
+
+                })();
                 </script>
             </body>
             </html>
