@@ -7,44 +7,97 @@ const PROXY_DOMAIN = process.env.PROXY_DOMAIN || ".chitkara.dns.navy";
 
 const STEALTH_SCRIPT = `
 <script>
-// 🚨 RED TEAM DEFENSE: Network Telemetry Interceptor 🚨
-// This hook intercepts all XHR, fetch, and Beacons sent by Testpad's JS
-// and scrubs any mention of '.navy' from the URLs and Payloads before they leave the browser.
+// 🔒 GOD MODE STEALTH ENGINE v2.0 🔒
+// Intercepts ALL possible detection vectors in the browser
 (function() {
     try {
+        const PROXY_SUFFIX = '${PROXY_DOMAIN}';
+        const REAL_ORIGIN = 'https://' + window.location.hostname.replace(PROXY_SUFFIX, '');
+        const REAL_HOST = window.location.hostname.replace(PROXY_SUFFIX, '');
+
         const scrub = (text) => {
             if (typeof text !== 'string') return text;
-            return text.replace(/\\.chitkara\\.dns\\.navy/g, '');
+            return text.replace(new RegExp(PROXY_SUFFIX.replace(/\\./g, '\\\\\\.'), 'g'), '');
         };
 
-        // 1. Intercept Fetch
+        // ====== LAYER 1: LOCATION SPOOFING ======
+        // If Testpad reads window.location, document.URL, or document.referrer,
+        // they see the REAL testpad domain, not .navy
+
+        const fakeLocation = new URL(window.location.href.replace(PROXY_SUFFIX, ''));
+        
+        // Override document.referrer
+        try {
+            Object.defineProperty(document, 'referrer', {
+                get: function() { return scrub(document.referrer || '') || REAL_ORIGIN; },
+                configurable: true
+            });
+        } catch(e) {}
+
+        // Override document.URL
+        try {
+            Object.defineProperty(document, 'URL', {
+                get: function() { return fakeLocation.href; },
+                configurable: true
+            });
+        } catch(e) {}
+
+        // Override document.domain
+        try {
+            Object.defineProperty(document, 'domain', {
+                get: function() { return REAL_HOST; },
+                configurable: true
+            });
+        } catch(e) {}
+
+        // Override document.documentURI
+        try {
+            Object.defineProperty(document, 'documentURI', {
+                get: function() { return fakeLocation.href; },
+                configurable: true
+            });
+        } catch(e) {}
+
+        // ====== LAYER 2: NETWORK INTERCEPTION ======
+        // Scrub .navy from ALL outgoing network requests
+
+        // 2a. Intercept Fetch
         const origFetch = window.fetch;
         window.fetch = async function(...args) {
+            if (typeof args[0] === 'string') args[0] = scrub(args[0]);
+            if (args[0] instanceof Request) {
+                args[0] = new Request(scrub(args[0].url), args[0]);
+            }
             if (args[1] && args[1].body && typeof args[1].body === 'string') {
                 args[1].body = scrub(args[1].body);
             }
-            if (typeof args[0] === 'string') {
-                args[0] = scrub(args[0]);
+            if (args[1] && args[1].headers) {
+                const h = new Headers(args[1].headers);
+                if (h.get('referer')) h.set('referer', scrub(h.get('referer')));
+                if (h.get('origin')) h.set('origin', scrub(h.get('origin')));
+                args[1].headers = h;
             }
             return origFetch.apply(this, args);
         };
 
-        // 2. Intercept XHR
+        // 2b. Intercept XHR
         const origOpen = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function(method, url, ...rest) {
             if (typeof url === 'string') url = scrub(url);
             return origOpen.call(this, method, url, ...rest);
         };
-        
         const origSend = XMLHttpRequest.prototype.send;
         XMLHttpRequest.prototype.send = function(body) {
-            if (typeof body === 'string') {
-                body = scrub(body);
-            }
+            if (typeof body === 'string') body = scrub(body);
             return origSend.call(this, body);
         };
-        
-        // 3. Intercept Beacons (used for analytics/telemetry)
+        const origSetHeader = XMLHttpRequest.prototype.setRequestHeader;
+        XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
+            if (typeof value === 'string') value = scrub(value);
+            return origSetHeader.call(this, name, value);
+        };
+
+        // 2c. Intercept Beacons
         if (navigator.sendBeacon) {
             const origBeacon = navigator.sendBeacon;
             navigator.sendBeacon = function(url, data) {
@@ -53,9 +106,75 @@ const STEALTH_SCRIPT = `
                 return origBeacon.call(this, url, data);
             };
         }
-    } catch (e) {
-        console.error("Stealth hook failed:", e);
-    }
+
+        // 2d. Intercept Image tracking pixels
+        const origImage = window.Image;
+        window.Image = function(...args) {
+            const img = new origImage(...args);
+            const origSrc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+            if (origSrc && origSrc.set) {
+                Object.defineProperty(img, 'src', {
+                    set: function(val) { origSrc.set.call(this, scrub(val)); },
+                    get: function() { return origSrc.get.call(this); }
+                });
+            }
+            return img;
+        };
+        window.Image.prototype = origImage.prototype;
+
+        // 2e. Intercept WebSocket URLs
+        const origWS = window.WebSocket;
+        window.WebSocket = function(url, ...rest) {
+            if (typeof url === 'string') url = scrub(url);
+            return new origWS(url, ...rest);
+        };
+        window.WebSocket.prototype = origWS.prototype;
+
+        // ====== LAYER 3: PERFORMANCE API CLOAKING ======
+        // Block performance.getEntries() from revealing /__solver_api calls
+
+        const origGetEntries = performance.getEntries;
+        performance.getEntries = function() {
+            return origGetEntries.call(this).filter(e => !e.name || !e.name.includes('__solver'));
+        };
+        const origGetByType = performance.getEntriesByType;
+        performance.getEntriesByType = function(type) {
+            return origGetByType.call(this, type).filter(e => !e.name || !e.name.includes('__solver'));
+        };
+        const origGetByName = performance.getEntriesByName;
+        performance.getEntriesByName = function(name, type) {
+            if (typeof name === 'string' && name.includes('__solver')) return [];
+            return origGetByName.call(this, name, type);
+        };
+
+        // ====== LAYER 4: WEBRTC IP LEAK PREVENTION ======
+        // Prevent WebRTC from leaking your real IP address
+
+        const origRTC = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+        if (origRTC) {
+            window.RTCPeerConnection = function(config, ...rest) {
+                if (config && config.iceServers) config.iceServers = [];
+                const pc = new origRTC(config, ...rest);
+                const origCreateOffer = pc.createOffer.bind(pc);
+                pc.createOffer = function(opts) {
+                    if (opts) opts.offerToReceiveAudio = false;
+                    return origCreateOffer(opts);
+                };
+                return pc;
+            };
+            window.RTCPeerConnection.prototype = origRTC.prototype;
+        }
+
+        // ====== LAYER 5: CONSOLE PROTECTION ======
+        // If someone opens DevTools and types document.URL or location.href,
+        // they see the clean URL
+
+        const origToString = Location.prototype.toString;
+        Location.prototype.toString = function() {
+            return scrub(origToString.call(this));
+        };
+
+    } catch (e) {}
 })();
 </script>
 `;
