@@ -5,18 +5,84 @@ const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.GROQ_API_KEY || process.env.API_KEY || "YOUR_GROQ_API_KEY_HERE";
 const PROXY_DOMAIN = process.env.PROXY_DOMAIN || ".chitkara.dns.navy";
 
+const BYPASS_DOMAINS = [
+    'accounts.google.com','login.microsoftonline.com','login.live.com','auth0.com','okta.com',
+    'googleapis.com','gstatic.com','recaptcha.net','hcaptcha.com','challenges.cloudflare.com',
+    'cdn.jsdelivr.net','cdnjs.cloudflare.com','unpkg.com','fonts.googleapis.com','fonts.gstatic.com',
+    'sentry.io','firebase.googleapis.com','firebaseapp.com','firebaseio.com',
+    'analytics.google.com','www.googletagmanager.com','appleid.apple.com','github.com',
+    'facebook.com','fbcdn.net','clarity.ms','hotjar.com','cloudflareinsights.com',
+    'stripe.com','razorpay.com','paypal.com','paytm.com'
+];
+
+function shouldBypass(url) {
+    if (!url) return true;
+    for (const d of BYPASS_DOMAINS) { if (url.includes(d)) return true; }
+    return false;
+}
+
+function rewriteUrlToProxy(url) {
+    if (!url || shouldBypass(url)) return url;
+    try {
+        const parsed = new URL(url);
+        if (parsed.hostname.endsWith(PROXY_DOMAIN)) return url;
+        parsed.hostname = parsed.hostname + PROXY_DOMAIN;
+        return parsed.href;
+    } catch(e) { return url; }
+}
+
 const STEALTH_SCRIPT = `
 <script id="proxy-stealth">
-// 🔒 GOD MODE STEALTH ENGINE v2.0 🔒
-// Intercepts ALL possible detection vectors in the browser
 (function() {
     try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     try {
-        const PROXY_SUFFIX = '${PROXY_DOMAIN}';
-        const REAL_ORIGIN = 'https://' + window.location.hostname.replace(PROXY_SUFFIX, '');
-        const REAL_HOST = window.location.hostname.replace(PROXY_SUFFIX, '');
+        var PROXY_SUFFIX = '${PROXY_DOMAIN}';
+        var REAL_ORIGIN = 'https://' + window.location.hostname.replace(PROXY_SUFFIX, '');
+        var REAL_HOST = window.location.hostname.replace(PROXY_SUFFIX, '');
 
-        const scrub = (text) => {
+        var _bp = ['accounts.google.com','login.microsoftonline.com','login.live.com','auth0.com','okta.com',
+            'googleapis.com','gstatic.com','google.com/recaptcha','www.google.com/recaptcha','recaptcha.net',
+            'hcaptcha.com','challenges.cloudflare.com','cdn.jsdelivr.net','cdnjs.cloudflare.com',
+            'unpkg.com','fonts.googleapis.com','fonts.gstatic.com','sentry.io','firebase.googleapis.com',
+            'firebaseapp.com','firebaseio.com','analytics.google.com','www.googletagmanager.com',
+            'cognito-idp.','cognito-identity.','appleid.apple.com','github.com/login','facebook.com',
+            'fbcdn.net','clarity.ms','hotjar.com','cloudflareinsights.com','newrelic.com','nr-data.net',
+            'datadoghq.com','dd-trace','bugsnag.com','rollbar.com','logrocket.com','fullstory.com',
+            'segment.io','segment.com','mixpanel.com','amplitude.com','intercom.io','crisp.chat',
+            'tawk.to','zendesk.com','freshdesk.com','stripe.com','js.stripe.com','razorpay.com',
+            'checkout.razorpay.com','paypal.com','paytm.com'];
+
+        var _isBypassed = function(u) {
+            if (!u || typeof u !== 'string') return true;
+            for (var i = 0; i < _bp.length; i++) { if (u.indexOf(_bp[i]) !== -1) return true; }
+            return false;
+        };
+
+        var _needsTunnel = function(u) {
+            if (!u || typeof u !== 'string') return false;
+            if (u.indexOf('data:') === 0 || u.indexOf('blob:') === 0 || u.indexOf('javascript:') === 0) return false;
+            if (u.indexOf('/__') !== -1) return false;
+            if (u.indexOf(PROXY_SUFFIX) !== -1) return false;
+            if (_isBypassed(u)) return false;
+            try {
+                var p = new URL(u, window.location.href);
+                if (p.hostname === window.location.hostname) return false;
+                if (p.hostname === 'localhost' || p.hostname === '127.0.0.1') return false;
+                if (p.protocol !== 'https:' && p.protocol !== 'http:') return false;
+                return true;
+            } catch(e) { return false; }
+        };
+
+        var _tunnelUrl = function(u) {
+            if (!_needsTunnel(u)) return u;
+            try {
+                var p = new URL(u);
+                p.hostname = p.hostname + PROXY_SUFFIX;
+                return p.href;
+            } catch(e) { return u; }
+        };
+
+        var scrub = function(text) {
             if (typeof text !== 'string') return text;
             while (text.indexOf(PROXY_SUFFIX) !== -1) {
                 text = text.split(PROXY_SUFFIX).join('');
@@ -25,37 +91,27 @@ const STEALTH_SCRIPT = `
         };
 
         // ====== LAYER 1: LOCATION SPOOFING ======
-        // If Testpad reads window.location, document.URL, or document.referrer,
-        // they see the REAL testpad domain, not .navy
-
-        const fakeLocation = new URL(window.location.href.replace(PROXY_SUFFIX, ''));
+        var fakeLocation = new URL(window.location.href.replace(PROXY_SUFFIX, ''));
         
-        // Override document.referrer
         try {
-            const origRef = document.referrer || '';
+            var origRef = document.referrer || '';
             Object.defineProperty(document, 'referrer', {
                 get: function() { return scrub(origRef) || REAL_ORIGIN; },
                 configurable: true
             });
         } catch(e) {}
-
-        // Override document.URL
         try {
             Object.defineProperty(document, 'URL', {
                 get: function() { return fakeLocation.href; },
                 configurable: true
             });
         } catch(e) {}
-
-        // Override document.domain
         try {
             Object.defineProperty(document, 'domain', {
                 get: function() { return REAL_HOST; },
                 configurable: true
             });
         } catch(e) {}
-
-        // Override document.documentURI
         try {
             Object.defineProperty(document, 'documentURI', {
                 get: function() { return fakeLocation.href; },
@@ -68,20 +124,22 @@ const STEALTH_SCRIPT = `
         window.webkitRTCPeerConnection = undefined;
         window.mozRTCPeerConnection = undefined;
 
-        // ====== LAYER 2: NETWORK INTERCEPTION ======
-        // Scrub .navy from ALL outgoing network requests
+        // ====== LAYER 2: UNIVERSAL NETWORK INTERCEPTION ======
 
-        // 2a. Intercept Fetch
-        const origFetch = window.fetch;
+        var origFetch = window.fetch;
         window.fetch = async function(...args) {
-            let url = typeof args[0] === 'string' ? args[0] : (args[0] instanceof Request ? args[0].url : '');
-            // Don't scrub internal proxy API calls
+            var url = typeof args[0] === 'string' ? args[0] : (args[0] instanceof Request ? args[0].url : '');
             if (url.indexOf('/__') === -1) {
+                if (typeof args[0] === 'string') {
+                    args[0] = _tunnelUrl(args[0]);
+                } else if (args[0] instanceof Request) {
+                    args[0] = new Request(_tunnelUrl(args[0].url), args[0]);
+                }
                 if (args[1] && args[1].body && typeof args[1].body === 'string') {
                     args[1].body = scrub(args[1].body);
                 }
                 if (args[1] && args[1].headers) {
-                    const h = new Headers(args[1].headers);
+                    var h = new Headers(args[1].headers);
                     if (h.get('referer')) h.set('referer', scrub(h.get('referer')));
                     if (h.get('origin')) h.set('origin', scrub(h.get('origin')));
                     args[1].headers = h;
@@ -90,112 +148,97 @@ const STEALTH_SCRIPT = `
             return origFetch.apply(this, args);
         };
 
-        // 2b. Intercept XHR
-        const origOpen = XMLHttpRequest.prototype.open;
+        var origOpen = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+            if (typeof url === 'string' && url.indexOf('/__') === -1) {
+                url = _tunnelUrl(url);
+            }
             return origOpen.call(this, method, url, ...rest);
         };
-        const origSend = XMLHttpRequest.prototype.send;
+        var origSend = XMLHttpRequest.prototype.send;
         XMLHttpRequest.prototype.send = function(body) {
             if (typeof body === 'string') body = scrub(body);
             return origSend.call(this, body);
         };
-        const origSetHeader = XMLHttpRequest.prototype.setRequestHeader;
+        var origSetHeader = XMLHttpRequest.prototype.setRequestHeader;
         XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
             if (typeof value === 'string') value = scrub(value);
             return origSetHeader.call(this, name, value);
         };
 
-        // 2c. Intercept Beacons
         if (navigator.sendBeacon) {
-            const origBeacon = navigator.sendBeacon;
+            var origBeacon = navigator.sendBeacon;
             navigator.sendBeacon = function(url, data) {
                 if (typeof url === 'string' && url.indexOf('/__') === -1) url = scrub(url);
                 return origBeacon.call(this, url, data);
             };
         }
 
-        // 2d. Intercept Performance API (Hide internal API calls from Network Audit)
+        // Performance API Cloaking
         try {
-            const origGetEntries = performance.getEntries;
+            var origGetEntries = performance.getEntries;
             performance.getEntries = function() {
-                return origGetEntries.call(this).filter(e => !(e.name && e.name.includes('/__')));
+                return origGetEntries.call(this).filter(function(e) {
+                    return !(e.name && (e.name.includes('/__') || e.name.includes(PROXY_SUFFIX)));
+                });
             };
-            const origGetEntriesByType = performance.getEntriesByType;
+            var origGetEntriesByType = performance.getEntriesByType;
             performance.getEntriesByType = function(type) {
-                return origGetEntriesByType.call(this, type).filter(e => !(e.name && e.name.includes('/__')));
+                return origGetEntriesByType.call(this, type).filter(function(e) {
+                    return !(e.name && (e.name.includes('/__') || e.name.includes(PROXY_SUFFIX)));
+                });
             };
-            const origGetEntriesByName = performance.getEntriesByName;
+            var origGetEntriesByName = performance.getEntriesByName;
             performance.getEntriesByName = function(name, type) {
-                if (typeof name === 'string' && name.includes('/__')) return [];
+                if (typeof name === 'string' && (name.includes('/__') || name.includes(PROXY_SUFFIX))) return [];
                 return origGetEntriesByName.call(this, name, type);
             };
             performance.clearResourceTimings();
         } catch(e) {}
 
-        // 2e. Intercept Image tracking pixels
-        const origImage = window.Image;
+        var origImage = window.Image;
         window.Image = function(...args) {
-            const img = new origImage(...args);
-            const origSrc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
-            if (origSrc && origSrc.set) {
+            var img = new origImage(...args);
+            var origSrcDesc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+            if (origSrcDesc && origSrcDesc.set) {
                 Object.defineProperty(img, 'src', {
-                    set: function(val) { origSrc.set.call(this, scrub(val)); },
-                    get: function() { return origSrc.get.call(this); }
+                    set: function(val) { origSrcDesc.set.call(this, scrub(val)); },
+                    get: function() { return origSrcDesc.get.call(this); }
                 });
             }
             return img;
         };
         window.Image.prototype = origImage.prototype;
 
-        // 2e. Intercept WebSocket URLs
-        const origWS = window.WebSocket;
+        var origWS = window.WebSocket;
         window.WebSocket = function(url, ...rest) {
             if (typeof url === 'string') url = scrub(url);
             return new origWS(url, ...rest);
         };
         window.WebSocket.prototype = origWS.prototype;
 
-        // ====== LAYER 3: PERFORMANCE API CLOAKING ======
-        // Block performance.getEntries() from revealing /__solver_api calls
+        // ====== LAYER 3: DYNAMIC DOM OBSERVER ======
+        try {
+            var _mo = new MutationObserver(function(mutations) {
+                mutations.forEach(function(m) {
+                    m.addedNodes.forEach(function(node) {
+                        if (node.nodeType !== 1) return;
+                        var els = [node];
+                        if (node.querySelectorAll) {
+                            els = els.concat(Array.from(node.querySelectorAll('img,script,link,iframe,video,audio,source')));
+                        }
+                        els.forEach(function(el) {
+                            if (el.src && _needsTunnel(el.src)) { el.src = _tunnelUrl(el.src); }
+                            if (el.href && _needsTunnel(el.href)) { el.href = _tunnelUrl(el.href); }
+                        });
+                    });
+                });
+            });
+            _mo.observe(document.documentElement, { childList: true, subtree: true });
+        } catch(e) {}
 
-        const origGetEntries = performance.getEntries;
-        performance.getEntries = function() {
-            return origGetEntries.call(this).filter(e => !e.name || !e.name.includes('__solver'));
-        };
-        const origGetByType = performance.getEntriesByType;
-        performance.getEntriesByType = function(type) {
-            return origGetByType.call(this, type).filter(e => !e.name || !e.name.includes('__solver'));
-        };
-        const origGetByName = performance.getEntriesByName;
-        performance.getEntriesByName = function(name, type) {
-            if (typeof name === 'string' && name.includes('__solver')) return [];
-            return origGetByName.call(this, name, type);
-        };
-
-        // ====== LAYER 4: WEBRTC IP LEAK PREVENTION ======
-        // Prevent WebRTC from leaking your real IP address
-
-        const origRTC = window.RTCPeerConnection || window.webkitRTCPeerConnection;
-        if (origRTC) {
-            window.RTCPeerConnection = function(config, ...rest) {
-                if (config && config.iceServers) config.iceServers = [];
-                const pc = new origRTC(config, ...rest);
-                const origCreateOffer = pc.createOffer.bind(pc);
-                pc.createOffer = function(opts) {
-                    if (opts) opts.offerToReceiveAudio = false;
-                    return origCreateOffer(opts);
-                };
-                return pc;
-            };
-            window.RTCPeerConnection.prototype = origRTC.prototype;
-        }
-
-        // ====== LAYER 5: CONSOLE PROTECTION ======
-        // If someone opens DevTools and types document.URL or location.href,
-        // they see the clean URL
-
-        const origToString = Location.prototype.toString;
+        // ====== LAYER 4: CONSOLE PROTECTION ======
+        var origToString = Location.prototype.toString;
         Location.prototype.toString = function() {
             return scrub(origToString.call(this));
         };
@@ -205,10 +248,14 @@ const STEALTH_SCRIPT = `
 </script>
 `;
 
+
+
 const SOLVER_SCRIPT = `
-<script>
+<script id="proxy-solver">
 (function() {
-  try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
+
+  let _ci = 0;
+try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
   if (window._solverActive) return;
   window._solverActive = true;
 
@@ -500,6 +547,7 @@ app.post('/__solver_api', async (req, res) => {
         if (req.body.key && req.body.key.startsWith('gsk_')) {
             finalKey = req.body.key;
         }
+        
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -511,7 +559,6 @@ app.post('/__solver_api', async (req, res) => {
         const data = await response.json();
         res.json(data);
     } catch (err) {
-        console.error("Solver API Error:", err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -525,7 +572,6 @@ const SELF_URL = process.env.RAILWAY_PUBLIC_DOMAIN
 if (SELF_URL) {
     setInterval(() => {
         fetch(SELF_URL).catch(() => {});
-        console.log('[Keepalive] Self-ping sent to', SELF_URL);
     }, 4 * 60 * 1000); // every 4 minutes
 }
 
@@ -839,8 +885,6 @@ int main() {
                 });
             }
         }
-
-        console.log('[Mock Exam UI] Loaded');
         render();
     </script>
 
@@ -1166,6 +1210,21 @@ int main() {
         const response = await fetch(fetchUrl, fetchOptions);
         const contentType = response.headers.get("content-type") || "";
 
+        // 3.5. SMART REDIRECT HANDLER
+        if ([301, 302, 303, 307, 308].includes(response.status)) {
+            let location = response.headers.get("location");
+            if (location) {
+                try {
+                    const absLocation = new URL(location, fetchUrl).href;
+                    if (shouldBypass(absLocation)) {
+                        return res.redirect(response.status === 301 ? 301 : 302, absLocation);
+                    }
+                    location = rewriteUrlToProxy(absLocation);
+                } catch(e) {}
+                return res.redirect(response.status === 301 ? 301 : 302, location);
+            }
+        }
+
         // 4. REBUILD HEADERS
         for (const [key, value] of response.headers.entries()) {
             if (['content-encoding', 'content-length', 'transfer-encoding', 'connection'].includes(key.toLowerCase())) continue;
@@ -1202,6 +1261,14 @@ int main() {
             const hostRegex = new RegExp('https?://' + escapedHost, 'g');
             html = html.replace(hostRegex, 'https://' + host);
 
+            // Universal cross-domain URL rewriting for href, src, action attributes
+            html = html.replace(/((?:href|src|action)\s*=\s*["'])(https?:\/\/)([^"'\s>]+)(["'])/gi, function(match, prefix, protocol, rest, suffix) {
+                const fullUrl = protocol + rest;
+                if (shouldBypass(fullUrl)) return match;
+                if (fullUrl.includes(PROXY_DOMAIN)) return match;
+                return prefix + rewriteUrlToProxy(fullUrl) + suffix;
+            });
+
             if (html.includes("</body>")) {
                 html = html.replace("</body>", STEALTH_SCRIPT + "\\n" + SOLVER_SCRIPT + "\\n</body>");
             } else if (html.includes("</BODY>")) {
@@ -1235,14 +1302,11 @@ int main() {
         }
 
     } catch (err) {
-        console.error(err);
         res.status(502).send("Proxy error: " + err.message);
     }
 });
 if (process.env.VERCEL) {
     module.exports = app;
 } else {
-    app.listen(PORT, '0.0.0.0', () => {
-        console.log('Proxy server running on port ' + PORT);
-    });
+    app.listen(PORT, '0.0.0.0', () => {});
 }
