@@ -254,7 +254,6 @@ const SOLVER_SCRIPT = `
 <script id="proxy-solver">
 (function() {
 
-  let _ci = 0;
 try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
   if (window._solverActive) return;
   window._solverActive = true;
@@ -652,6 +651,8 @@ app.get('/__debug_ip', (req, res) => {
     const ip = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress;
     res.send(`<h1>Your Public IP Address is: <span style="color:blue;">${ip}</span></h1><p>Copy this and tell me!</p>`);
 });
+
+app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 app.all('*', async (req, res) => {
     try {
