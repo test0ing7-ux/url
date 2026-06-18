@@ -85,7 +85,7 @@ function getTargetProxyUrl(url, proxyDomain) {
     try {
         const parsed = new URL(url);
         if (parsed.hostname.endsWith(proxyDomain)) return url;
-        const dashed = parsed.hostname.replace(/\./g, '-');
+        const dashed = parsed.hostname.replace(/-/g, '--').replace(/\./g, '-');
         const suffix = proxyDomain.startsWith('.') ? proxyDomain : '.' + proxyDomain;
         parsed.hostname = dashed + suffix;
         return parsed.href;
@@ -202,7 +202,7 @@ const getStealthScript = () => `
                 }
                 if (!proxySuffix) return url;
                 if (parsed.hostname.endsWith(proxySuffix)) return url;
-                var dashed = parsed.hostname.replace(/\./g, '-');
+                var dashed = parsed.hostname.replace(/-/g, '--').replace(/\./g, '-');
                 parsed.hostname = dashed + proxySuffix;
                 return parsed.href;
             } catch(e) {
@@ -1691,7 +1691,12 @@ int main() {
             if (['host', 'connection', 'accept-encoding', 'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port', 'x-real-ip', 'cf-connecting-ip'].includes(key.toLowerCase())) continue;
             
             if (key.toLowerCase() === 'origin' || key.toLowerCase() === 'referer') {
-                proxyHeaders.set(key, value.replace(req.headers.host + '/fetch/', ""));
+                let rewrittenValue = value;
+                rewrittenValue = rewrittenValue.replace('/fetch/', '/');
+                if (req.headers.host) {
+                    rewrittenValue = rewrittenValue.split(req.headers.host).join(originalHost);
+                }
+                proxyHeaders.set(key, rewrittenValue);
             } else {
                 proxyHeaders.set(key, value);
             }
@@ -1757,7 +1762,11 @@ int main() {
                     if (shouldBypass(absLocation)) {
                         return res.redirect(response.status === 301 ? 301 : 302, absLocation);
                     }
-                    location = '/fetch/' + absLocation;
+                    if (proxyDomain) {
+                        location = getTargetProxyUrl(absLocation, proxyDomain);
+                    } else {
+                        location = '/fetch/' + absLocation;
+                    }
                 } catch(e) {}
                 return res.redirect(response.status === 301 ? 301 : 302, location);
             }
