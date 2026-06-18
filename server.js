@@ -183,28 +183,23 @@ const getStealthScript = () => `
         
         try {
             var origRef = document.referrer || '';
-            Object.defineProperty(document, 'referrer', {
-                get: function() { return scrub(origRef) || REAL_ORIGIN; },
-                configurable: true
-            });
-        } catch(e) {}
-        try {
-            Object.defineProperty(document, 'URL', {
-                get: function() { return fakeLocation.href; },
-                configurable: true
-            });
-        } catch(e) {}
-        try {
-            Object.defineProperty(document, 'domain', {
-                get: function() { return REAL_HOST; },
-                configurable: true
-            });
-        } catch(e) {}
-        try {
-            Object.defineProperty(document, 'documentURI', {
-                get: function() { return fakeLocation.href; },
-                configurable: true
-            });
+            var props = {
+                referrer: function() { return scrub(origRef) || REAL_ORIGIN; },
+                URL: function() { return fakeLocation.href; },
+                domain: function() { return REAL_HOST; },
+                documentURI: function() { return fakeLocation.href; }
+            };
+            for (var prop in props) {
+                if (props.hasOwnProperty(prop)) {
+                    try {
+                        Object.defineProperty(Document.prototype, prop, { get: props[prop], configurable: true });
+                    } catch(e) {
+                        try {
+                            Object.defineProperty(document, prop, { get: props[prop], configurable: true });
+                        } catch(ex) {}
+                    }
+                }
+            }
         } catch(e) {}
 
         // ====== LAYER 1.5: WEBRTC BLINDING ======
