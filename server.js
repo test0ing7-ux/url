@@ -717,19 +717,280 @@ app.all('*', async (req, res) => {
         let targetUrl = "";
         let originalHost = "";
         
+        const { originalHost: extractedHost, proxyDomain } = extractDomains(host);
+        
         if (req.originalUrl.startsWith('/fetch/')) {
             targetUrl = req.originalUrl.substring(7);
+            const m = targetUrl.match(/^(https?:\/\/[^\/]+)/);
+            if (m) res.cookie('proxy_origin', m[1], { maxAge: 86400000, path: '/' });
+        } else if (proxyDomain && extractedHost) {
+            targetUrl = protocol + '://' + extractedHost + req.originalUrl;
+            res.cookie('proxy_origin', protocol + '://' + extractedHost, { maxAge: 86400000, path: '/' });
         } else {
             if (req.path === '/' || req.path === '') {
                 return res.send(`
-                    <html>
-                    <body style="font-family:sans-serif; padding:50px; text-align:center; background:#111; color:#fff;">
-                        <h2>Universal Stealth Proxy 🥷</h2>
-                        <p>Paste your exam link below and hit Go. No domains required.</p>
-                        <input id="url" type="text" placeholder="https://www.mocktestzone.in..." style="padding:15px; width:400px; border-radius:5px; border:none; outline:none; color:black;">
-                        <button onclick="window.location.href='/fetch/' + document.getElementById('url').value" style="padding:15px 30px; background:#ef6c00; color:white; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">Launch Ghost Mode</button>
-                    </body>
-                    </html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Stealth Proxy</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --glass-bg: rgba(20, 25, 40, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --primary: #00f2fe;
+            --secondary: #4facfe;
+            --text-main: #ffffff;
+            --text-muted: #a0aec0;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(79, 172, 254, 0.15), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(0, 242, 254, 0.15), transparent 25%);
+            overflow: hidden;
+            position: relative;
+        }
+        .bg-animation {
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, #0b0f19, #1a2035, #0b0f19);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            z-index: -1;
+            opacity: 0.8;
+        }
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .container {
+            width: 100%;
+            max-width: 600px;
+            padding: 40px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            transform: translateY(20px);
+            opacity: 0;
+            animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes slideUp {
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+            letter-spacing: -1px;
+        }
+        .header p { color: var(--text-muted); font-size: 1.1rem; }
+        
+        .input-group {
+            position: relative;
+            margin-bottom: 30px;
+            display: flex;
+            gap: 10px;
+        }
+        .input-group input {
+            flex: 1;
+            padding: 18px 24px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            color: var(--text-main);
+            font-size: 1.1rem;
+            outline: none;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+            width: 100%;
+        }
+        .input-group input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.2), inset 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .btn {
+            padding: 0 30px;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
+            white-space: nowrap;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 242, 254, 0.4);
+        }
+        .btn:active { transform: translateY(0); }
+        
+        .recent-section {
+            margin-top: 30px;
+            border-top: 1px solid var(--glass-border);
+            padding-top: 20px;
+        }
+        .recent-section h3 {
+            font-size: 1rem;
+            color: var(--text-muted);
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        .recent-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .recent-item {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            color: var(--text-main);
+        }
+        .recent-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+        .recent-item span {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 90%;
+        }
+        .bookmarklet-box {
+            margin-top: 30px;
+            background: rgba(0, 242, 254, 0.05);
+            border: 1px dashed var(--primary);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .bookmarklet-box p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 15px; }
+        .bookmarklet-btn {
+            display: inline-block;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: grab;
+            transition: all 0.3s;
+        }
+        .bookmarklet-btn:hover {
+            background: var(--primary);
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-animation"></div>
+    <div class="container">
+        <div class="header">
+            <h1>Universal Stealth</h1>
+            <p>Bypass restrictions instantly with Ghost Mode</p>
+        </div>
+        
+        <div class="input-group">
+            <input type="text" id="url" placeholder="https://exam.university.edu..." onkeypress="if(event.key === 'Enter') launchProxy()">
+            <button class="btn" onclick="launchProxy()">Launch</button>
+        </div>
+        
+        <div class="recent-section" id="recent-container" style="display: none;">
+            <h3>Recent Targets</h3>
+            <div class="recent-list" id="recent-list"></div>
+        </div>
+
+        <div class="bookmarklet-box">
+            <p>Want a faster way? Drag this button to your bookmarks bar. Click it when you are on any site you want to proxy!</p>
+            <a id="bookmarklet" class="bookmarklet-btn" href="#">🥷 Stealth Proxy</a>
+        </div>
+    </div>
+
+    <script>
+        // Set Bookmarklet URL dynamically
+        const origin = window.location.origin;
+        document.getElementById('bookmarklet').href = "javascript:window.location.href='" + origin + "/fetch/'+window.location.href;";
+
+        // Manage Recent URLs
+        let recents = [];
+        try { recents = JSON.parse(localStorage.getItem('proxyRecents') || '[]'); } catch(e){}
+        
+        function updateRecentsUI() {
+            const container = document.getElementById('recent-container');
+            const list = document.getElementById('recent-list');
+            if (recents.length > 0) {
+                container.style.display = 'block';
+                list.innerHTML = '';
+                recents.forEach(url => {
+                    const a = document.createElement('a');
+                    a.className = 'recent-item';
+                    a.href = '/fetch/' + url;
+                    a.innerHTML = '<span>' + url + '</span> <span>→</span>';
+                    list.appendChild(a);
+                });
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
+        function launchProxy() {
+            let url = document.getElementById('url').value.trim();
+            if (!url) return;
+            if (!url.startsWith('http')) url = 'https://' + url;
+            
+            // Save to recents
+            recents = recents.filter(u => u !== url);
+            recents.unshift(url);
+            if (recents.length > 5) recents.pop();
+            try { localStorage.setItem('proxyRecents', JSON.stringify(recents)); } catch(e){}
+
+            // Redirect
+            window.location.href = '/fetch/' + url;
+        }
+        
+        updateRecentsUI();
+    </script>
+</body>
+</html>
                 `);
             }
             const referer = req.headers.referer;
@@ -737,16 +998,16 @@ app.all('*', async (req, res) => {
                 const match = referer.match(/\/fetch\/(https?:\/\/[^\/]+)/);
                 if (match) {
                     targetUrl = match[1] + req.originalUrl;
+                    res.cookie('proxy_origin', match[1], { maxAge: 86400000, path: '/' });
+                }
+            } else {
+                const cookieOrigin = req.headers.cookie ? (req.headers.cookie.match(/proxy_origin=([^;]+)/) || [])[1] : null;
+                if (cookieOrigin) {
+                    targetUrl = decodeURIComponent(cookieOrigin) + req.originalUrl;
                 }
             }
             if (!targetUrl) {
-                // If the user submits a URL in the UI without http/https, prefix it
-                if (req.originalUrl.startsWith('/fetch/')) {
-                    targetUrl = req.originalUrl.substring(7);
-                    if (!targetUrl.startsWith('http')) targetUrl = 'https://' + targetUrl;
-                } else {
-                    return res.status(404).send("Invalid proxy request. Prefix URL with /fetch/");
-                }
+                return res.status(404).send("Invalid proxy request. Prefix URL with /fetch/");
             }
         }
 
