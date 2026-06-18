@@ -73,6 +73,9 @@ const BYPASS_DOMAINS = [
 
 function shouldBypass(url) {
     if (!url) return true;
+    if (url.includes('chitkara.dns.navy') || url.includes('up.railway.app') || url.includes('onrender.com') || url.includes('hf.space')) {
+        return true;
+    }
     for (const d of BYPASS_DOMAINS) { if (url.includes(d)) return true; }
     return false;
 }
@@ -123,6 +126,7 @@ const getStealthScript = () => `
 
         var _isBypassed = function(u) {
             if (!u || typeof u !== 'string') return true;
+            if (u.indexOf('chitkara.dns.navy') !== -1 || u.indexOf('up.railway.app') !== -1 || u.indexOf('onrender.com') !== -1 || u.indexOf('hf.space') !== -1) return true;
             for (var i = 0; i < _bp.length; i++) { if (u.indexOf(_bp[i]) !== -1) return true; }
             return false;
         };
@@ -1707,11 +1711,11 @@ int main() {
             const baseTag = `<base href="/${fetchUrl}">`;
             
             if (html.includes("<head>")) {
-                html = html.replace("<head>", "<head>\\n" + baseTag);
-                if (html.includes("</body>")) html = html.replace("</body>", currentStealthScript + "\\n" + SOLVER_SCRIPT + "\\n</body>");
-                else html += "\\n" + currentStealthScript + "\\n" + SOLVER_SCRIPT;
+                html = html.replace("<head>", "<head>\n" + baseTag);
+                if (html.includes("</body>")) html = html.replace("</body>", currentStealthScript + "\n" + SOLVER_SCRIPT + "\n</body>");
+                else html += "\n" + currentStealthScript + "\n" + SOLVER_SCRIPT;
             } else {
-                html = baseTag + "\\n" + currentStealthScript + "\\n" + SOLVER_SCRIPT + "\\n" + html;
+                html = baseTag + "\n" + currentStealthScript + "\n" + SOLVER_SCRIPT + "\n" + html;
             }
             
             // Spoof window.location.hostname in HTML inline scripts
