@@ -95,6 +95,34 @@ const getStealthScript = () => `
 (function() {
     try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     try {
+        var extractRealHost = function(h) {
+            if (!h) return '';
+            if (h.includes('localhost') || h.includes('127.0.0.1')) return h;
+            var proxySuffix = '';
+            var suffixes = ['.chitkara.dns.navy', '.up.railway.app', '.onrender.com', '.hf.space'];
+            for (var i = 0; i < suffixes.length; i++) {
+                if (h.endsWith(suffixes[i])) {
+                    proxySuffix = suffixes[i];
+                    break;
+                }
+            }
+            if (proxySuffix) {
+                var subdomain = h.slice(0, -proxySuffix.length);
+                if (subdomain && subdomain !== 'test') {
+                    if (subdomain.indexOf('-') !== -1 && subdomain.indexOf('.') === -1) {
+                        var parts = subdomain.split('--');
+                        var processedParts = [];
+                        for (var i = 0; i < parts.length; i++) {
+                            processedParts.push(parts[i].replace(/-/g, '.'));
+                        }
+                        return processedParts.join('-');
+                    }
+                    return subdomain;
+                }
+            }
+            return h;
+        };
+
         var REAL_ORIGIN = '';
         var REAL_HOST = '';
         var match = window.location.href.match(/\\/(?:fetch\\/)?(https?:\\/+(?:[^\\/]+))/);
@@ -110,6 +138,14 @@ const getStealthScript = () => `
                 REAL_ORIGIN = parsed.origin;
                 REAL_HOST = parsed.hostname;
             } catch(e) {}
+        }
+
+        if (!REAL_HOST) {
+            var extracted = extractRealHost(window.location.hostname);
+            if (extracted && extracted !== window.location.hostname) {
+                REAL_HOST = extracted;
+                REAL_ORIGIN = window.location.protocol + '//' + extracted;
+            }
         }
 
         var _bp = ['accounts.google.com','login.microsoftonline.com','login.live.com','auth0.com','okta.com',
@@ -176,18 +212,32 @@ const getStealthScript = () => `
 
         // ====== LAYER 1: LOCATION SPOOFING ======
         var fakeLocationStr = window.location.href;
-        var prefix = window.location.origin + '/fetch/';
-        if (fakeLocationStr.startsWith(prefix)) fakeLocationStr = fakeLocationStr.replace(prefix, '');
-        var prefix2 = window.location.origin + '/';
-        if (fakeLocationStr.startsWith(prefix2 + 'https:/') || fakeLocationStr.startsWith(prefix2 + 'http:/')) {
-            fakeLocationStr = fakeLocationStr.replace(prefix2, '');
-            if (fakeLocationStr.startsWith('https:/') && !fakeLocationStr.startsWith('https://')) {
-                fakeLocationStr = 'https://' + fakeLocationStr.substring(7);
-            } else if (fakeLocationStr.startsWith('http:/') && !fakeLocationStr.startsWith('http://')) {
-                fakeLocationStr = 'http://' + fakeLocationStr.substring(6);
+        if (REAL_ORIGIN) {
+            if (fakeLocationStr.indexOf('/fetch/') !== -1 || fakeLocationStr.indexOf('/https:/') !== -1 || fakeLocationStr.indexOf('/http:/') !== -1) {
+                var prefix = window.location.origin + '/fetch/';
+                if (fakeLocationStr.startsWith(prefix)) fakeLocationStr = fakeLocationStr.replace(prefix, '');
+                var prefix2 = window.location.origin + '/';
+                if (fakeLocationStr.startsWith(prefix2 + 'https:/') || fakeLocationStr.startsWith(prefix2 + 'http:/')) {
+                    fakeLocationStr = fakeLocationStr.replace(prefix2, '');
+                    if (fakeLocationStr.startsWith('https:/') && !fakeLocationStr.startsWith('https://')) {
+                        fakeLocationStr = 'https://' + fakeLocationStr.substring(7);
+                    } else if (fakeLocationStr.startsWith('http:/') && !fakeLocationStr.startsWith('http://')) {
+                        fakeLocationStr = 'http://' + fakeLocationStr.substring(6);
+                    }
+                }
+            } else {
+                fakeLocationStr = fakeLocationStr.replace(window.location.origin, REAL_ORIGIN);
             }
         }
         var fakeLocation = new URL(fakeLocationStr);
+        try {
+            if (REAL_ORIGIN) {
+                Object.defineProperty(window, 'origin', {
+                    get: function() { return REAL_ORIGIN; },
+                    configurable: true
+                });
+            }
+        } catch(e) {}
         
         try {
             var origRef = document.referrer || '';
@@ -1718,9 +1768,14 @@ int main() {
                 html = baseTag + "\n" + currentStealthScript + "\n" + SOLVER_SCRIPT + "\n" + html;
             }
             
-            // Spoof window.location.hostname in HTML inline scripts
+            const originalOrigin = protocol + "://" + originalHost;
+            // Spoof window.location.hostname/host/origin in HTML inline scripts
             html = html.replace(/window\.location\.hostname/g, "('" + originalHost + "')");
             html = html.replace(/location\.hostname/g, "('" + originalHost + "')");
+            html = html.replace(/window\.location\.host/g, "('" + originalHost + "')");
+            html = html.replace(/location\.host/g, "('" + originalHost + "')");
+            html = html.replace(/window\.location\.origin/g, "('" + originalOrigin + "')");
+            html = html.replace(/location\.origin/g, "('" + originalOrigin + "')");
             
             return res.status(response.status).send(html);
         }
@@ -1729,8 +1784,13 @@ int main() {
         res.status(response.status);
         if (contentType && (contentType.includes("javascript") || contentType.includes("application/js") || contentType.includes("application/javascript"))) {
             let jsContent = await response.text();
+            const originalOrigin = protocol + "://" + originalHost;
             jsContent = jsContent.replace(/window\.location\.hostname/g, "('" + originalHost + "')");
             jsContent = jsContent.replace(/location\.hostname/g, "('" + originalHost + "')");
+            jsContent = jsContent.replace(/window\.location\.host/g, "('" + originalHost + "')");
+            jsContent = jsContent.replace(/location\.host/g, "('" + originalHost + "')");
+            jsContent = jsContent.replace(/window\.location\.origin/g, "('" + originalOrigin + "')");
+            jsContent = jsContent.replace(/location\.origin/g, "('" + originalOrigin + "')");
             res.setHeader("Content-Type", contentType);
             return res.send(jsContent);
         }
