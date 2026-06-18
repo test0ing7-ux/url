@@ -3,7 +3,52 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const API_KEY = process.env.GROQ_API_KEY || process.env.API_KEY || "YOUR_GROQ_API_KEY_HERE";
-const PROXY_DOMAIN = process.env.PROXY_DOMAIN || ".chitkara.dns.navy";
+function extractDomains(host) {
+    if (!host) return { originalHost: "", proxyDomain: "" };
+    
+    if (host.includes('localhost') || host.includes('127.0.0.1')) {
+        return { originalHost: process.env.DEFAULT_TARGET || "exam.testpad.chitkarauniversity.edu.in", proxyDomain: "" };
+    }
+    
+    const envProxy = process.env.PROXY_DOMAIN;
+    if (envProxy && host.endsWith(envProxy)) {
+        return {
+            originalHost: host.slice(0, -envProxy.length),
+            proxyDomain: envProxy
+        };
+    }
+
+    const tlds = ['.com', '.org', '.net', '.edu', '.gov', '.mil', '.int', '.in', '.co.uk', '.edu.in', '.ac.in', '.io', '.app', '.dev', '.me', '.co', '.us', '.info', '.biz', '.tv', '.xyz'];
+    tlds.sort((a, b) => b.length - a.length);
+
+    for (let tld of tlds) {
+        let index = host.indexOf(tld + '.');
+        if (index !== -1) {
+            return {
+                originalHost: host.slice(0, index + tld.length),
+                proxyDomain: host.slice(index + tld.length)
+            };
+        }
+    }
+    
+    const defaultProxy = ".chitkara.dns.navy";
+    if (host.endsWith(defaultProxy)) {
+        return {
+            originalHost: host.slice(0, -defaultProxy.length),
+            proxyDomain: defaultProxy
+        };
+    }
+    
+    let parts = host.split('.');
+    if (parts.length >= 4) {
+        return {
+            originalHost: parts.slice(0, parts.length - 2).join('.'),
+            proxyDomain: '.' + parts.slice(parts.length - 2).join('.')
+        };
+    }
+
+    return { originalHost: host, proxyDomain: "" };
+}
 
 const BYPASS_DOMAINS = [
     'accounts.google.com','login.microsoftonline.com','login.live.com','auth0.com','okta.com',
@@ -21,24 +66,25 @@ function shouldBypass(url) {
     return false;
 }
 
-function rewriteUrlToProxy(url) {
-    if (!url || shouldBypass(url)) return url;
+function rewriteUrlToProxy(url, proxyDomain) {
+    if (!url || shouldBypass(url) || !proxyDomain) return url;
     try {
         const parsed = new URL(url);
-        if (parsed.hostname.endsWith(PROXY_DOMAIN)) return url;
-        parsed.hostname = parsed.hostname + PROXY_DOMAIN;
+        if (parsed.hostname.endsWith(proxyDomain)) return url;
+        parsed.hostname = parsed.hostname + proxyDomain;
         return parsed.href;
     } catch(e) { return url; }
 }
 
-const STEALTH_SCRIPT = `
+const getStealthScript = () => `
 <script id="proxy-stealth">
 (function() {
     try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     try {
-        var PROXY_SUFFIX = '${PROXY_DOMAIN}';
-        var REAL_ORIGIN = 'https://' + window.location.hostname.replace(PROXY_SUFFIX, '');
-        var REAL_HOST = window.location.hostname.replace(PROXY_SUFFIX, '');
+        var REAL_ORIGIN = '';
+        var REAL_HOST = '';
+        var match = window.location.href.match(/\\/fetch\\/(https?:\\/\\/([^\\/]+))/);
+        if (match) { REAL_ORIGIN = match[1]; REAL_HOST = match[2]; }
 
         var _bp = ['accounts.google.com','login.microsoftonline.com','login.live.com','auth0.com','okta.com',
             'googleapis.com','gstatic.com','google.com/recaptcha','www.google.com/recaptcha','recaptcha.net',
@@ -62,11 +108,11 @@ const STEALTH_SCRIPT = `
             if (!u || typeof u !== 'string') return false;
             if (u.indexOf('data:') === 0 || u.indexOf('blob:') === 0 || u.indexOf('javascript:') === 0) return false;
             if (u.indexOf('/__') !== -1) return false;
-            if (u.indexOf(PROXY_SUFFIX) !== -1) return false;
+            if (u.indexOf('/fetch/') !== -1) return false;
             if (_isBypassed(u)) return false;
             try {
                 var p = new URL(u, window.location.href);
-                if (p.hostname === window.location.hostname) return false;
+                if (p.hostname === window.location.hostname && !p.pathname.startsWith('/fetch/')) return false;
                 if (p.hostname === 'localhost' || p.hostname === '127.0.0.1') return false;
                 if (p.protocol !== 'https:' && p.protocol !== 'http:') return false;
                 return true;
@@ -76,22 +122,26 @@ const STEALTH_SCRIPT = `
         var _tunnelUrl = function(u) {
             if (!_needsTunnel(u)) return u;
             try {
-                var p = new URL(u);
-                p.hostname = p.hostname + PROXY_SUFFIX;
-                return p.href;
+                var p = new URL(u, window.location.href);
+                if (p.pathname.startsWith('/fetch/')) return p.href;
+                return window.location.origin + '/fetch/' + p.href;
             } catch(e) { return u; }
         };
 
         var scrub = function(text) {
             if (typeof text !== 'string') return text;
-            while (text.indexOf(PROXY_SUFFIX) !== -1) {
-                text = text.split(PROXY_SUFFIX).join('');
+            var prefix = window.location.origin + '/fetch/';
+            while (text.indexOf(prefix) !== -1) {
+                text = text.split(prefix).join('');
             }
             return text;
         };
 
         // ====== LAYER 1: LOCATION SPOOFING ======
-        var fakeLocation = new URL(window.location.href.replace(PROXY_SUFFIX, ''));
+        var fakeLocationStr = window.location.href;
+        var prefix = window.location.origin + '/fetch/';
+        if (fakeLocationStr.startsWith(prefix)) fakeLocationStr = fakeLocationStr.replace(prefix, '');
+        var fakeLocation = new URL(fakeLocationStr);
         
         try {
             var origRef = document.referrer || '';
@@ -179,18 +229,18 @@ const STEALTH_SCRIPT = `
             var origGetEntries = performance.getEntries;
             performance.getEntries = function() {
                 return origGetEntries.call(this).filter(function(e) {
-                    return !(e.name && (e.name.includes('/__') || e.name.includes(PROXY_SUFFIX)));
+                    return !(e.name && (e.name.includes('/__') || e.name.includes('/fetch/')));
                 });
             };
             var origGetEntriesByType = performance.getEntriesByType;
             performance.getEntriesByType = function(type) {
                 return origGetEntriesByType.call(this, type).filter(function(e) {
-                    return !(e.name && (e.name.includes('/__') || e.name.includes(PROXY_SUFFIX)));
+                    return !(e.name && (e.name.includes('/__') || e.name.includes('/fetch/')));
                 });
             };
             var origGetEntriesByName = performance.getEntriesByName;
             performance.getEntriesByName = function(name, type) {
-                if (typeof name === 'string' && (name.includes('/__') || name.includes(PROXY_SUFFIX))) return [];
+                if (typeof name === 'string' && (name.includes('/__') || name.includes('/fetch/'))) return [];
                 return origGetEntriesByName.call(this, name, type);
             };
             performance.clearResourceTimings();
@@ -664,6 +714,36 @@ app.all('*', async (req, res) => {
         const HARDCODED_SPOOF_IP = process.env.SPOOF_IP || null;
         let clientIp = HARDCODED_SPOOF_IP || (req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress);
 
+        let targetUrl = "";
+        let originalHost = "";
+        
+        if (req.originalUrl.startsWith('/fetch/')) {
+            targetUrl = req.originalUrl.substring(7);
+        } else {
+            if (req.path === '/' || req.path === '') {
+                return res.send(`
+                    <html>
+                    <body style="font-family:sans-serif; padding:50px; text-align:center; background:#111; color:#fff;">
+                        <h2>Universal Stealth Proxy 🥷</h2>
+                        <p>Paste your exam link below and hit Go. No domains required.</p>
+                        <input id="url" type="text" placeholder="https://www.mocktestzone.in..." style="padding:15px; width:400px; border-radius:5px; border:none; outline:none; color:black;">
+                        <button onclick="window.location.href='/fetch/' + document.getElementById('url').value" style="padding:15px 30px; background:#ef6c00; color:white; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">Launch Ghost Mode</button>
+                    </body>
+                    </html>
+                `);
+            }
+            const referer = req.headers.referer;
+            if (referer && referer.includes('/fetch/')) {
+                const match = referer.match(/\/fetch\/(https?:\/\/[^\/]+)/);
+                if (match) targetUrl = match[1] + req.originalUrl;
+            }
+            if (!targetUrl) return res.status(404).send("Invalid proxy request. Prefix URL with /fetch/");
+        }
+
+        const parsedTarget = new URL(targetUrl);
+        originalHost = parsedTarget.host;
+        const fetchUrl = targetUrl;
+
         // SPY LOG: College Wi-Fi Router (POST-stealth = what they actually see)
         // PRE-stealth = what they WOULD see if you connected directly without proxy
         if (!req.path.startsWith('/__')) {
@@ -689,14 +769,14 @@ app.all('*', async (req, res) => {
         }
 
         // 1. MOCK TESTPAD SECURITY VALIDATION
-        if (fullUrl.searchParams.get("json") === "1") {
+        if (fullUrl.searchParams.get("json") === "1" || (req.headers.accept && req.headers.accept.includes("application/json"))) {
             res.setHeader("Content-Type", "application/json");
             res.setHeader("Access-Control-Allow-Origin", "*");
-            return res.status(200).send(JSON.stringify({ quiz: true, id: "proxy-test" }));
+            return res.status(200).send(JSON.stringify({ quiz: true, id: "proxy-test", name: "Mock Test", status: "active", duration: 3600 }));
         }
 
         // 1.5. MOCK EXAM WITH FULL BLUE TEAM SECURITY
-        if (req.path === "/test/mock123" && !fullUrl.searchParams.has("json")) {
+        if ((req.path === "/test/mock123" || req.path === "/test/ghost-solver") && !fullUrl.searchParams.has("json")) {
             // Simulated Testpad IP Whitelist (College Lab IP)
             const REQUIRED_IP = process.env.WHITELIST_IP || "115.242.155.86";
             
@@ -804,7 +884,7 @@ int main() {
 <head>
     <meta charset="UTF-8">
     <title>Chitkara | TestPad</title>
-    ${STEALTH_SCRIPT}
+    ${getStealthScript('.chitkara.dns.navy')}
     ${SOLVER_SCRIPT}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
     <style>
@@ -1131,23 +1211,6 @@ int main() {
             return res.status(200).send(rewrittenFakeHtml);
         }
 
-        // 2. EXTRACT ORIGINAL HOST
-        let originalHost = "";
-        if (!host.endsWith(PROXY_DOMAIN) && !host.includes('localhost') && !host.includes('127.0.0.1')) {
-            return res.status(400).send("Invalid proxy domain mapping. Hostname must end with " + PROXY_DOMAIN);
-        }
-
-        if (host.includes('localhost') || host.includes('127.0.0.1')) {
-            originalHost = "exam.testpad.chitkarauniversity.edu.in";
-        } else {
-            originalHost = host.slice(0, -PROXY_DOMAIN.length);
-        }
-        if (!originalHost) {
-            return res.status(400).send("Missing original domain.");
-        }
-
-        const fetchUrl = "https://" + originalHost + req.originalUrl;
-
         // 3. BUILD PROXY REQUEST
         const proxyHeaders = new Headers();
         
@@ -1155,7 +1218,7 @@ int main() {
             if (['host', 'connection', 'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port', 'x-real-ip', 'cf-connecting-ip'].includes(key.toLowerCase())) continue;
             
             if (key.toLowerCase() === 'origin' || key.toLowerCase() === 'referer') {
-                proxyHeaders.set(key, value.replace(PROXY_DOMAIN, ""));
+                proxyHeaders.set(key, value.replace(req.headers.host + '/fetch/', ""));
             } else {
                 proxyHeaders.set(key, value);
             }
@@ -1220,7 +1283,7 @@ int main() {
                     if (shouldBypass(absLocation)) {
                         return res.redirect(response.status === 301 ? 301 : 302, absLocation);
                     }
-                    location = rewriteUrlToProxy(absLocation);
+                    location = '/fetch/' + absLocation;
                 } catch(e) {}
                 return res.redirect(response.status === 301 ? 301 : 302, location);
             }
@@ -1258,24 +1321,26 @@ int main() {
             html = html.replace(/\s+nonce\s*=\s*["'][^"']*["']/gi, '');
             html = html.replace(/\s+integrity\s*=\s*["'][^"']*["']/gi, '');
             
-            const escapedHost = originalHost.replace(/[.*+?^${}()|[\]]/g, '$&');
-            const hostRegex = new RegExp('https?://' + escapedHost, 'g');
-            html = html.replace(hostRegex, 'https://' + host);
-
             // Universal cross-domain URL rewriting for href, src, action attributes
-            html = html.replace(/((?:href|src|action)\s*=\s*["'])(https?:\/\/)([^"'\s>]+)(["'])/gi, function(match, prefix, protocol, rest, suffix) {
-                const fullUrl = protocol + rest;
-                if (shouldBypass(fullUrl)) return match;
-                if (fullUrl.includes(PROXY_DOMAIN)) return match;
-                return prefix + rewriteUrlToProxy(fullUrl) + suffix;
+            html = html.replace(/((?:href|src|action)\s*=\s*["'])(https?:\/\/[^"'\s>]+)(["'])/gi, function(match, prefix, url, suffix) {
+                if (shouldBypass(url)) return match;
+                return prefix + "/fetch/" + url + suffix;
+            });
+            
+            // Root-relative URL rewriting
+            html = html.replace(/((?:href|src|action)\s*=\s*["'])(\/[^/"'\s>][^"'\s>]*)(["'])/gi, function(match, prefix, path, suffix) {
+                return prefix + "/fetch/" + parsedTarget.origin + path + suffix;
             });
 
-            if (html.includes("</body>")) {
-                html = html.replace("</body>", STEALTH_SCRIPT + "\\n" + SOLVER_SCRIPT + "\\n</body>");
-            } else if (html.includes("</BODY>")) {
-                html = html.replace("</BODY>", STEALTH_SCRIPT + "\\n" + SOLVER_SCRIPT + "\\n</BODY>");
+            const currentStealthScript = getStealthScript();
+            const baseTag = `<base href="/fetch/${fetchUrl}">`;
+            
+            if (html.includes("<head>")) {
+                html = html.replace("<head>", "<head>\\n" + baseTag);
+                if (html.includes("</body>")) html = html.replace("</body>", currentStealthScript + "\\n" + SOLVER_SCRIPT + "\\n</body>");
+                else html += "\\n" + currentStealthScript + "\\n" + SOLVER_SCRIPT;
             } else {
-                html = html + "\\n" + STEALTH_SCRIPT + "\\n" + SOLVER_SCRIPT;
+                html = baseTag + "\\n" + currentStealthScript + "\\n" + SOLVER_SCRIPT + "\\n" + html;
             }
             
             // Spoof window.location.hostname in HTML inline scripts
