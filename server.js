@@ -1227,9 +1227,10 @@ int main() {
         
         // SPOOFING: Inject the college IP into all common "Real IP" headers
         if (clientIp) {
-            proxyHeaders.set("X-Forwarded-For", clientIp);
+            // We can't safely spoof CF-Connecting-IP or X-Forwarded-For to a Cloudflare protected site
+            // as Cloudflare will throw Error 1000 (DNS points to prohibited IP). 
+            // We only spoof the application-level headers that the backend app might read.
             proxyHeaders.set("X-Real-IP", clientIp);
-            proxyHeaders.set("CF-Connecting-IP", clientIp);
             proxyHeaders.set("True-Client-IP", clientIp);
         }
 
