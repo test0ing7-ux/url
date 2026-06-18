@@ -80,14 +80,20 @@ function shouldBypass(url) {
     return false;
 }
 
-function rewriteUrlToProxy(url, proxyDomain) {
+function getTargetProxyUrl(url, proxyDomain) {
     if (!url || shouldBypass(url) || !proxyDomain) return url;
     try {
         const parsed = new URL(url);
         if (parsed.hostname.endsWith(proxyDomain)) return url;
-        parsed.hostname = parsed.hostname + proxyDomain;
+        const dashed = parsed.hostname.replace(/\./g, '-');
+        const suffix = proxyDomain.startsWith('.') ? proxyDomain : '.' + proxyDomain;
+        parsed.hostname = dashed + suffix;
         return parsed.href;
     } catch(e) { return url; }
+}
+
+function rewriteUrlToProxy(url, proxyDomain) {
+    return getTargetProxyUrl(url, proxyDomain);
 }
 
 const getStealthScript = () => `
@@ -182,9 +188,44 @@ const getStealthScript = () => `
             } catch(e) { return false; }
         };
 
+        var getTargetProxyUrl = function(url) {
+            try {
+                var parsed = new URL(url, window.location.href);
+                var h = window.location.hostname;
+                var proxySuffix = '';
+                var suffixes = ['.chitkara.dns.navy', '.up.railway.app', '.onrender.com', '.hf.space'];
+                for (var i = 0; i < suffixes.length; i++) {
+                    if (h.endsWith(suffixes[i])) {
+                        proxySuffix = suffixes[i];
+                        break;
+                    }
+                }
+                if (!proxySuffix) return url;
+                if (parsed.hostname.endsWith(proxySuffix)) return url;
+                var dashed = parsed.hostname.replace(/\./g, '-');
+                parsed.hostname = dashed + proxySuffix;
+                return parsed.href;
+            } catch(e) {
+                return url;
+            }
+        };
+
         var _tunnelUrl = function(u) {
             if (!_needsTunnel(u)) return u;
             try {
+                var h = window.location.hostname;
+                var hasProxySuffix = false;
+                var suffixes = ['.chitkara.dns.navy', '.up.railway.app', '.onrender.com', '.hf.space'];
+                for (var i = 0; i < suffixes.length; i++) {
+                    if (h.endsWith(suffixes[i])) {
+                        hasProxySuffix = true;
+                        break;
+                    }
+                }
+                if (hasProxySuffix && window.location.href.indexOf('/fetch/') === -1 && window.location.href.indexOf('/https:/') === -1) {
+                    return getTargetProxyUrl(u);
+                }
+
                 var p = new URL(u, window.location.href);
                 if (p.pathname.startsWith('/fetch/') || p.pathname.startsWith('/https:/') || p.pathname.startsWith('/http:/') || p.pathname.startsWith('/wss:/') || p.pathname.startsWith('/ws:/')) return p.href;
                 
@@ -813,6 +854,15 @@ app.get('/__debug_ip', (req, res) => {
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 app.all('*', async (req, res) => {
+    if (req.method === 'OPTIONS') {
+        res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD');
+        res.setHeader('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || '*');
+        res.setHeader('Access-Control-Max-Age', '86400');
+        return res.status(204).end();
+    }
+
     try {
         const protocol = req.headers['x-forwarded-proto'] || 'https';
         const host = req.headers.host || '';
@@ -1730,7 +1780,15 @@ int main() {
             }
         }
 
-        res.setHeader("Access-Control-Allow-Origin", "*");
+        if (req.headers.origin) {
+            res.setHeader("Access-Control-Allow-Origin", req.headers.origin);
+            res.setHeader("Access-Control-Allow-Credentials", "true");
+            if (req.headers['access-control-request-headers']) {
+                res.setHeader('Access-Control-Allow-Headers', req.headers['access-control-request-headers']);
+            }
+        } else {
+            res.setHeader("Access-Control-Allow-Origin", "*");
+        }
         res.removeHeader("content-security-policy");
         res.removeHeader("content-security-policy-report-only");
         res.removeHeader("x-frame-options");
@@ -1745,17 +1803,28 @@ int main() {
             html = html.replace(/\s+nonce\s*=\s*["'][^"']*["']/gi, '');
             html = html.replace(/\s+integrity\s*=\s*["'][^"']*["']/gi, '');
             
-            // Universal cross-domain URL rewriting for href, src, action attributes
-            html = html.replace(/((?:href|src|action)\s*=\s*["'])(https?:\/+[^\/[][^"'\s>]+)(["'])/gi, function(match, prefix, url, suffix) {
-                let normalizedUrl = url.replace(/^(https?):\/+/, '$1://');
-                if (shouldBypass(normalizedUrl)) return match;
-                return prefix + "/" + normalizedUrl + suffix;
-            });
-            
-            // Root-relative URL rewriting
-            html = html.replace(/((?:href|src|action)\s*=\s*["'])(\/[^/"'\s>][^"'\s>]*)(["'])/gi, function(match, prefix, path, suffix) {
-                return prefix + "/" + parsedTarget.origin + path + suffix;
-            });
+            // Universal URL rewriting based on routing mode
+            if (proxyDomain) {
+                // For subdomain-based routing: rewrite absolute URLs to their proxy subdomains
+                html = html.replace(/((?:href|src|action)\s*=\s*["'])(https?:\/+[^\/[][^"'\s>]+)(["'])/gi, function(match, prefix, url, suffix) {
+                    let normalizedUrl = url.replace(/^(https?):\/+/, '$1://');
+                    if (shouldBypass(normalizedUrl)) return match;
+                    return prefix + getTargetProxyUrl(normalizedUrl, proxyDomain) + suffix;
+                });
+                // Keep relative URLs untouched for subdomain routing!
+            } else {
+                // For path-based routing: rewrite absolute URLs to path proxy prefixes
+                html = html.replace(/((?:href|src|action)\s*=\s*["'])(https?:\/+[^\/[][^"'\s>]+)(["'])/gi, function(match, prefix, url, suffix) {
+                    let normalizedUrl = url.replace(/^(https?):\/+/, '$1://');
+                    if (shouldBypass(normalizedUrl)) return match;
+                    return prefix + "/" + normalizedUrl + suffix;
+                });
+                
+                // Rewrite root-relative URLs
+                html = html.replace(/((?:href|src|action)\s*=\s*["'])(\/[^/"'\s>][^"'\s>]*)(["'])/gi, function(match, prefix, path, suffix) {
+                    return prefix + "/" + parsedTarget.origin + path + suffix;
+                });
+            }
 
             const currentStealthScript = getStealthScript();
             const baseTag = `<base href="/${fetchUrl}">`;
