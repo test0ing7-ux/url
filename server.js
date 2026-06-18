@@ -131,13 +131,13 @@ const getStealthScript = () => `
             if (!u || typeof u !== 'string') return false;
             if (u.indexOf('data:') === 0 || u.indexOf('blob:') === 0 || u.indexOf('javascript:') === 0) return false;
             if (u.indexOf('/__') !== -1) return false;
-            if (u.indexOf('/fetch/') !== -1 || u.indexOf('/https:/') !== -1 || u.indexOf('/http:/') !== -1) return false;
+            if (u.indexOf('/fetch/') !== -1 || u.indexOf('/https:/') !== -1 || u.indexOf('/http:/') !== -1 || u.indexOf('/wss:/') !== -1 || u.indexOf('/ws:/') !== -1) return false;
             if (_isBypassed(u)) return false;
             try {
                 var p = new URL(u, window.location.href);
-                if (p.hostname === window.location.hostname && !p.pathname.startsWith('/fetch/') && !p.pathname.startsWith('/https:/') && !p.pathname.startsWith('/http:/')) return false;
+                if (p.hostname === window.location.hostname && !p.pathname.startsWith('/fetch/') && !p.pathname.startsWith('/https:/') && !p.pathname.startsWith('/http:/') && !p.pathname.startsWith('/wss:/') && !p.pathname.startsWith('/ws:/')) return false;
                 if (p.hostname === 'localhost' || p.hostname === '127.0.0.1') return false;
-                if (p.protocol !== 'https:' && p.protocol !== 'http:') return false;
+                if (p.protocol !== 'https:' && p.protocol !== 'http:' && p.protocol !== 'wss:' && p.protocol !== 'ws:') return false;
                 return true;
             } catch(e) { return false; }
         };
@@ -146,8 +146,12 @@ const getStealthScript = () => `
             if (!_needsTunnel(u)) return u;
             try {
                 var p = new URL(u, window.location.href);
-                if (p.pathname.startsWith('/fetch/') || p.pathname.startsWith('/https:/') || p.pathname.startsWith('/http:/')) return p.href;
-                return window.location.origin + '/' + p.href;
+                if (p.pathname.startsWith('/fetch/') || p.pathname.startsWith('/https:/') || p.pathname.startsWith('/http:/') || p.pathname.startsWith('/wss:/') || p.pathname.startsWith('/ws:/')) return p.href;
+                
+                var isWs = p.protocol === 'ws:' || p.protocol === 'wss:';
+                var proxyProto = isWs ? (window.location.protocol === 'https:' ? 'wss:' : 'ws:') : window.location.protocol;
+                var tunnelHost = window.location.origin.replace(/^https?:/, proxyProto);
+                return tunnelHost + '/' + p.href;
             } catch(e) { return u; }
         };
 
@@ -206,6 +210,21 @@ const getStealthScript = () => `
         window.RTCPeerConnection = undefined;
         window.webkitRTCPeerConnection = undefined;
         window.mozRTCPeerConnection = undefined;
+
+        // ====== LAYER 1.6: STORAGE CRASH HARDENER ======
+        try {
+            var origParse = JSON.parse;
+            JSON.parse = function(text, reviver) {
+                if (text === null || text === undefined || text === 'null' || text === '') {
+                    return {};
+                }
+                try {
+                    return origParse(text, reviver);
+                } catch(e) {
+                    return {};
+                }
+            };
+        } catch(e) {}
 
         // ====== LAYER 2: UNIVERSAL NETWORK INTERCEPTION ======
 
@@ -295,7 +314,9 @@ const getStealthScript = () => `
 
         var origWS = window.WebSocket;
         window.WebSocket = function(url, ...rest) {
-            if (typeof url === 'string') url = scrub(url);
+            if (typeof url === 'string') {
+                url = _tunnelUrl(url);
+            }
             return new origWS(url, ...rest);
         };
         window.WebSocket.prototype = origWS.prototype;
@@ -1671,9 +1692,10 @@ int main() {
             html = html.replace(/\s+integrity\s*=\s*["'][^"']*["']/gi, '');
             
             // Universal cross-domain URL rewriting for href, src, action attributes
-            html = html.replace(/((?:href|src|action)\s*=\s*["'])(https?:\/\/[^"'\s>]+)(["'])/gi, function(match, prefix, url, suffix) {
-                if (shouldBypass(url)) return match;
-                return prefix + "/" + url + suffix;
+            html = html.replace(/((?:href|src|action)\s*=\s*["'])(https?:\/+[^\/[][^"'\s>]+)(["'])/gi, function(match, prefix, url, suffix) {
+                let normalizedUrl = url.replace(/^(https?):\/+/, '$1://');
+                if (shouldBypass(normalizedUrl)) return match;
+                return prefix + "/" + normalizedUrl + suffix;
             });
             
             // Root-relative URL rewriting
@@ -1723,5 +1745,130 @@ int main() {
 if (process.env.VERCEL) {
     module.exports = app;
 } else {
-    app.listen(PORT, '0.0.0.0', () => {});
+    const http = require('http');
+    const WebSocket = require('ws');
+    const server = http.createServer(app);
+    const wss = new WebSocket.Server({ noServer: true });
+
+    server.on('upgrade', (req, socket, head) => {
+        try {
+            const host = req.headers.host || '';
+            const protocol = req.headers['x-forwarded-proto'] || 'https';
+            let targetOrigin = "";
+
+            if (req.url.startsWith('/fetch/')) {
+                targetOrigin = req.url.substring(7);
+            } else if (req.url.startsWith('/https:/') || req.url.startsWith('/http:/') || req.url.startsWith('/wss:/') || req.url.startsWith('/ws:/')) {
+                let tempUrl = req.url.substring(1);
+                if (tempUrl.startsWith('https:/') && !tempUrl.startsWith('https://')) {
+                    tempUrl = 'https://' + tempUrl.substring(7);
+                } else if (tempUrl.startsWith('http:/') && !tempUrl.startsWith('http://')) {
+                    tempUrl = 'http://' + tempUrl.substring(6);
+                } else if (tempUrl.startsWith('wss:/') && !tempUrl.startsWith('wss://')) {
+                    tempUrl = 'wss://' + tempUrl.substring(5);
+                } else if (tempUrl.startsWith('ws:/') && !tempUrl.startsWith('ws://')) {
+                    tempUrl = 'ws://' + tempUrl.substring(4);
+                }
+                targetOrigin = tempUrl;
+            }
+
+            if (!targetOrigin) {
+                const { originalHost, proxyDomain } = extractDomains(host);
+                if (originalHost && proxyDomain) {
+                    targetOrigin = protocol + '://' + originalHost;
+                }
+            }
+
+            if (!targetOrigin) {
+                const referer = req.headers.referer;
+                if (referer) {
+                    let refMatch = referer.match(/\/fetch\/(https?:\/+(?:[^\/]+))/);
+                    if (!refMatch) {
+                        refMatch = referer.match(/\/(https?:\/+(?:[^\/]+))/);
+                    }
+                    if (refMatch) {
+                        let tempRef = refMatch[1];
+                        if (tempRef.startsWith('https:/') && !tempRef.startsWith('https://')) {
+                            tempRef = 'https://' + tempRef.substring(7);
+                        } else if (tempRef.startsWith('http:/') && !tempRef.startsWith('http://')) {
+                            tempRef = 'http://' + tempRef.substring(6);
+                        }
+                        targetOrigin = tempRef;
+                    }
+                }
+            }
+
+            if (!targetOrigin) {
+                const cookieOrigin = req.headers.cookie ? (req.headers.cookie.match(/proxy_origin=([^;]+)/) || [])[1] : null;
+                if (cookieOrigin) {
+                    targetOrigin = decodeURIComponent(cookieOrigin);
+                }
+            }
+
+            if (!targetOrigin) {
+                socket.destroy();
+                return;
+            }
+
+            const parsedOrigin = new URL(targetOrigin);
+            const wsProtocol = (parsedOrigin.protocol === 'https:' || parsedOrigin.protocol === 'wss:') ? 'wss:' : 'ws:';
+            let socketPath = req.url;
+
+            if (socketPath.startsWith('/fetch/')) {
+                socketPath = socketPath.substring(7 + targetOrigin.length);
+            } else if (socketPath.startsWith('/https:/') || socketPath.startsWith('/http:/') || socketPath.startsWith('/wss:/') || socketPath.startsWith('/ws:/')) {
+                const prefixStr = socketPath.startsWith('/https:/') ? '/https:/' : (socketPath.startsWith('/http:/') ? '/http:/' : (socketPath.startsWith('/wss:/') ? '/wss:/' : '/ws:/'));
+                if (socketPath.startsWith(prefixStr + '/')) {
+                    socketPath = socketPath.substring(prefixStr.length + 1 + parsedOrigin.host.length);
+                } else {
+                    socketPath = socketPath.substring(prefixStr.length + parsedOrigin.host.length);
+                }
+            }
+
+            if (!socketPath.startsWith('/')) {
+                socketPath = '/' + socketPath;
+            }
+
+            const targetWsUrl = wsProtocol + '//' + parsedOrigin.host + socketPath;
+
+            wss.handleUpgrade(req, socket, head, (ws) => {
+                const clientWs = new WebSocket(targetWsUrl, {
+                    headers: {
+                        origin: targetOrigin.replace(/^ws/, 'http'),
+                        cookie: req.headers.cookie || ''
+                    }
+                });
+
+                clientWs.on('open', () => {
+                    ws.on('message', (message) => {
+                        if (clientWs.readyState === WebSocket.OPEN) {
+                            clientWs.send(message);
+                        }
+                    });
+
+                    clientWs.on('message', (message) => {
+                        if (ws.readyState === WebSocket.OPEN) {
+                            ws.send(message);
+                        }
+                    });
+                });
+
+                clientWs.on('close', () => ws.close());
+                ws.on('close', () => clientWs.close());
+
+                clientWs.on('error', () => {
+                    ws.close();
+                    clientWs.close();
+                });
+                ws.on('error', () => {
+                    ws.close();
+                    clientWs.close();
+                });
+            });
+        } catch(err) {
+            socket.destroy();
+        }
+    });
+
+    server.listen(PORT, '0.0.0.0', () => {});
 }
