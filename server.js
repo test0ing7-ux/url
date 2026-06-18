@@ -735,9 +735,23 @@ app.all('*', async (req, res) => {
             const referer = req.headers.referer;
             if (referer && referer.includes('/fetch/')) {
                 const match = referer.match(/\/fetch\/(https?:\/\/[^\/]+)/);
-                if (match) targetUrl = match[1] + req.originalUrl;
+                if (match) {
+                    targetUrl = match[1] + req.originalUrl;
+                }
             }
-            if (!targetUrl) return res.status(404).send("Invalid proxy request. Prefix URL with /fetch/");
+            if (!targetUrl) {
+                // If the user submits a URL in the UI without http/https, prefix it
+                if (req.originalUrl.startsWith('/fetch/')) {
+                    targetUrl = req.originalUrl.substring(7);
+                    if (!targetUrl.startsWith('http')) targetUrl = 'https://' + targetUrl;
+                } else {
+                    return res.status(404).send("Invalid proxy request. Prefix URL with /fetch/");
+                }
+            }
+        }
+
+        if (!targetUrl.startsWith('http')) {
+            targetUrl = 'https://' + targetUrl;
         }
 
         const parsedTarget = new URL(targetUrl);
