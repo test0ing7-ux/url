@@ -99,7 +99,53 @@ function rewriteUrlToProxy(url, proxyDomain) {
 const getStealthScript = () => `
 <script id="proxy-stealth">
 (function() {
+(function() {
     try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
+    (function() {
+        var _define = undefined;
+        var _require = undefined;
+        try {
+            Object.defineProperty(Window.prototype, 'define', {
+                get: function() { return _define; },
+                set: function(val) {
+                    if (val !== undefined && val !== null) {
+                        _define = val;
+                    }
+                },
+                configurable: true
+            });
+            Object.defineProperty(Window.prototype, 'require', {
+                get: function() { return _require; },
+                set: function(val) {
+                    if (val !== undefined && val !== null) {
+                        _require = val;
+                    }
+                },
+                configurable: true
+            });
+        } catch (e) {
+            try {
+                Object.defineProperty(window, 'define', {
+                    get: function() { return _define; },
+                    set: function(val) {
+                        if (val !== undefined && val !== null) {
+                            _define = val;
+                        }
+                    },
+                    configurable: true
+                });
+                Object.defineProperty(window, 'require', {
+                    get: function() { return _require; },
+                    set: function(val) {
+                        if (val !== undefined && val !== null) {
+                            _require = val;
+                        }
+                    },
+                    configurable: true
+                });
+            } catch (ex) {}
+        }
+    })();
     try {
         var extractRealHost = function(h) {
             if (!h) return '';
@@ -1359,6 +1405,7 @@ int main() {
     <title>Chitkara | TestPad</title>
     ${getStealthScript('.chitkara.dns.navy')}
     ${SOLVER_SCRIPT}
+    <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
     <style>
         :root { --orange: #ef6c00; --bg-grey: #f5f5f5; --text-main: #333; }
