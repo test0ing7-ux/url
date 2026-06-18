@@ -1215,7 +1215,7 @@ int main() {
         const proxyHeaders = new Headers();
         
         for (const [key, value] of Object.entries(req.headers)) {
-            if (['host', 'connection', 'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port', 'x-real-ip', 'cf-connecting-ip'].includes(key.toLowerCase())) continue;
+            if (['host', 'connection', 'accept-encoding', 'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port', 'x-real-ip', 'cf-connecting-ip'].includes(key.toLowerCase())) continue;
             
             if (key.toLowerCase() === 'origin' || key.toLowerCase() === 'referer') {
                 proxyHeaders.set(key, value.replace(req.headers.host + '/fetch/', ""));
