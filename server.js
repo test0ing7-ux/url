@@ -131,7 +131,7 @@ const getStealthScript = () => `
 
         var REAL_ORIGIN = '';
         var REAL_HOST = '';
-        var match = window.location.href.match(/\\/(?:fetch\\/)?(https?:\\/+(?:[^\\/]+))/);
+        var match = window.location['href'].match(/\\/(?:fetch\\/)?(https?:\\/+(?:[^\\/]+))/);
         if (match) { 
             let targetOrigin = match[1];
             if (targetOrigin.startsWith('https:/') && !targetOrigin.startsWith('https://')) {
@@ -147,10 +147,10 @@ const getStealthScript = () => `
         }
 
         if (!REAL_HOST) {
-            var extracted = extractRealHost(window.location.hostname);
-            if (extracted && extracted !== window.location.hostname) {
+            var extracted = extractRealHost(window.location['hostname']);
+            if (extracted && extracted !== window.location['hostname']) {
                 REAL_HOST = extracted;
-                REAL_ORIGIN = window.location.protocol + '//' + extracted;
+                REAL_ORIGIN = window.location['protocol'] + '//' + extracted;
             }
         }
 
@@ -180,8 +180,8 @@ const getStealthScript = () => `
             if (u.indexOf('/fetch/') !== -1 || u.indexOf('/https:/') !== -1 || u.indexOf('/http:/') !== -1 || u.indexOf('/wss:/') !== -1 || u.indexOf('/ws:/') !== -1) return false;
             if (_isBypassed(u)) return false;
             try {
-                var p = new URL(u, window.location.href);
-                if (p.hostname === window.location.hostname && !p.pathname.startsWith('/fetch/') && !p.pathname.startsWith('/https:/') && !p.pathname.startsWith('/http:/') && !p.pathname.startsWith('/wss:/') && !p.pathname.startsWith('/ws:/')) return false;
+                var p = new URL(u, window.location['href']);
+                if (p.hostname === window.location['hostname'] && !p.pathname.startsWith('/fetch/') && !p.pathname.startsWith('/https:/') && !p.pathname.startsWith('/http:/') && !p.pathname.startsWith('/wss:/') && !p.pathname.startsWith('/ws:/')) return false;
                 if (p.hostname === 'localhost' || p.hostname === '127.0.0.1') return false;
                 if (p.protocol !== 'https:' && p.protocol !== 'http:' && p.protocol !== 'wss:' && p.protocol !== 'ws:') return false;
                 return true;
@@ -190,8 +190,8 @@ const getStealthScript = () => `
 
         var getTargetProxyUrl = function(url) {
             try {
-                var parsed = new URL(url, window.location.href);
-                var h = window.location.hostname;
+                var parsed = new URL(url, window.location['href']);
+                var h = window.location['hostname'];
                 var proxySuffix = '';
                 var suffixes = ['.chitkara.dns.navy', '.up.railway.app', '.onrender.com', '.hf.space'];
                 for (var i = 0; i < suffixes.length; i++) {
@@ -213,7 +213,7 @@ const getStealthScript = () => `
         var _tunnelUrl = function(u) {
             if (!_needsTunnel(u)) return u;
             try {
-                var h = window.location.hostname;
+                var h = window.location['hostname'];
                 var hasProxySuffix = false;
                 var suffixes = ['.chitkara.dns.navy', '.up.railway.app', '.onrender.com', '.hf.space'];
                 for (var i = 0; i < suffixes.length; i++) {
@@ -222,28 +222,28 @@ const getStealthScript = () => `
                         break;
                     }
                 }
-                if (hasProxySuffix && window.location.href.indexOf('/fetch/') === -1 && window.location.href.indexOf('/https:/') === -1) {
+                if (hasProxySuffix && window.location['href'].indexOf('/fetch/') === -1 && window.location['href'].indexOf('/https:/') === -1) {
                     return getTargetProxyUrl(u);
                 }
 
-                var p = new URL(u, window.location.href);
+                var p = new URL(u, window.location['href']);
                 if (p.pathname.startsWith('/fetch/') || p.pathname.startsWith('/https:/') || p.pathname.startsWith('/http:/') || p.pathname.startsWith('/wss:/') || p.pathname.startsWith('/ws:/')) return p.href;
                 
                 var isWs = p.protocol === 'ws:' || p.protocol === 'wss:';
-                var proxyProto = isWs ? (window.location.protocol === 'https:' ? 'wss:' : 'ws:') : window.location.protocol;
-                var tunnelHost = window.location.origin.replace(/^https?:/, proxyProto);
+                var proxyProto = isWs ? (window.location['protocol'] === 'https:' ? 'wss:' : 'ws:') : window.location['protocol'];
+                var tunnelHost = window.location['origin'].replace(/^https?:/, proxyProto);
                 return tunnelHost + '/' + p.href;
             } catch(e) { return u; }
         };
 
         var scrub = function(text) {
             if (typeof text !== 'string') return text;
-            var prefix1 = window.location.origin + '/fetch/';
+            var prefix1 = window.location['origin'] + '/fetch/';
             while (text.indexOf(prefix1) !== -1) { text = text.split(prefix1).join(''); }
-            var prefix2 = window.location.origin + '/https:/';
-            var prefix3 = window.location.origin + '/https://';
-            var prefix4 = window.location.origin + '/http:/';
-            var prefix5 = window.location.origin + '/http://';
+            var prefix2 = window.location['origin'] + '/https:/';
+            var prefix3 = window.location['origin'] + '/https://';
+            var prefix4 = window.location['origin'] + '/http:/';
+            var prefix5 = window.location['origin'] + '/http://';
             while (text.indexOf(prefix2) !== -1) { text = text.split(prefix2).join('https://'); }
             while (text.indexOf(prefix3) !== -1) { text = text.split(prefix3).join('https://'); }
             while (text.indexOf(prefix4) !== -1) { text = text.split(prefix4).join('http://'); }
@@ -252,12 +252,12 @@ const getStealthScript = () => `
         };
 
         // ====== LAYER 1: LOCATION SPOOFING ======
-        var fakeLocationStr = window.location.href;
+        var fakeLocationStr = window.location['href'];
         if (REAL_ORIGIN) {
             if (fakeLocationStr.indexOf('/fetch/') !== -1 || fakeLocationStr.indexOf('/https:/') !== -1 || fakeLocationStr.indexOf('/http:/') !== -1) {
-                var prefix = window.location.origin + '/fetch/';
+                var prefix = window.location['origin'] + '/fetch/';
                 if (fakeLocationStr.startsWith(prefix)) fakeLocationStr = fakeLocationStr.replace(prefix, '');
-                var prefix2 = window.location.origin + '/';
+                var prefix2 = window.location['origin'] + '/';
                 if (fakeLocationStr.startsWith(prefix2 + 'https:/') || fakeLocationStr.startsWith(prefix2 + 'http:/')) {
                     fakeLocationStr = fakeLocationStr.replace(prefix2, '');
                     if (fakeLocationStr.startsWith('https:/') && !fakeLocationStr.startsWith('https://')) {
@@ -267,7 +267,7 @@ const getStealthScript = () => `
                     }
                 }
             } else {
-                fakeLocationStr = fakeLocationStr.replace(window.location.origin, REAL_ORIGIN);
+                fakeLocationStr = fakeLocationStr.replace(window.location['origin'], REAL_ORIGIN);
             }
         }
         var fakeLocation = new URL(fakeLocationStr);
@@ -493,7 +493,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
         max_tokens: 1000
       };
       try {
-        res = await pristineFetch(window.location.origin + "/__solver_api", {
+        res = await pristineFetch(window.location['origin'] + "/__solver_api", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ key: GROQ_KEY, payload: payload })
@@ -1446,7 +1446,7 @@ int main() {
                 <!-- This is what the REAL Testpad security system would run -->
                 <script>
                 (function() {
-                    const ALERT_ENDPOINT = window.location.origin + '/__security_report';
+                    const ALERT_ENDPOINT = window.location['origin'] + '/__security_report';
                     const studentId = 'TEST_USER_001';
 
                     function sendAlert(type, severity, details) {
@@ -1827,14 +1827,14 @@ int main() {
             }
 
             const currentStealthScript = getStealthScript();
-            const baseTag = `<base href="/${fetchUrl}">`;
+            const baseTag = !proxyDomain ? `<base href="/${fetchUrl}">` : '';
             
             if (html.includes("<head>")) {
                 html = html.replace("<head>", "<head>\n" + baseTag);
                 if (html.includes("</body>")) html = html.replace("</body>", currentStealthScript + "\n" + SOLVER_SCRIPT + "\n</body>");
                 else html += "\n" + currentStealthScript + "\n" + SOLVER_SCRIPT;
             } else {
-                html = baseTag + "\n" + currentStealthScript + "\n" + SOLVER_SCRIPT + "\n" + html;
+                html = (baseTag ? baseTag + "\n" : "") + currentStealthScript + "\n" + SOLVER_SCRIPT + "\n" + html;
             }
             
             const originalOrigin = protocol + "://" + originalHost;
