@@ -662,6 +662,21 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     var el = document.activeElement;
     if (!el) return;
     
+    // Direct CodeMirror Injection (100% reliable for CodeQuotient)
+    try {
+      let cmEl = el.closest('.CodeMirror');
+      if (cmEl && cmEl.CodeMirror) {
+        let cm = cmEl.CodeMirror;
+        if (cm.getDoc) {
+          cm.getDoc().replaceRange(ch, cm.getDoc().getCursor());
+          return;
+        } else if (cm.replaceSelection) {
+          cm.replaceSelection(ch);
+          return;
+        }
+      }
+    } catch(e) {}
+
     try {
       if (document.execCommand('insertText', false, ch)) {
         return;
@@ -704,7 +719,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     const key = e.key || '';
     if (_cl.length > 0 && !e.ctrlKey && !e.altKey && !e.metaKey && key.length === 1) {
       const el = document.activeElement;
-      if (el && (el.tagName === 'TEXTAREA' || el.classList.contains('monaco-editor') || el.contentEditable === 'true' || el.tagName === 'INPUT')) {
+      if (el && (el.tagName === 'TEXTAREA' || el.classList.contains('monaco-editor') || el.contentEditable === 'true' || el.tagName === 'INPUT' || el.closest('.CodeMirror'))) {
         e.preventDefault(); e.stopPropagation();
         let cur = _cl[0];
         if (_ci < cur.length) {
@@ -779,7 +794,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
 
   let leftEdgeTriggered = false;
   document.addEventListener('mousemove', e => {
-    if (e.clientX <= 2) {
+    if (e.clientX <= 10) { // Increased from 2 to 10 for easier triggering
       if (!leftEdgeTriggered) {
         leftEdgeTriggered = true;
         solve();
@@ -795,8 +810,22 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     tkeys[e.code || e.key] = true;
     if ((tkeys['ArrowLeft'] || tkeys['Left']) && (tkeys['ArrowRight'] || tkeys['Right'])) { e.preventDefault(); solve(); }
     if (e.ctrlKey && e.altKey && (e.key === 's' || e.code === 'KeyS')) { e.preventDefault(); solve(); }
+    if (e.altKey && (e.key === 'x' || e.code === 'KeyX')) { e.preventDefault(); solve(); } // Alt+X fallback
   }, true);
-  document.addEventListener('keyup', e => { tkeys[e.code || e.key] = false; }, true);
+  
+  // Block keypress and keyup for ghost-typed characters to prevent duplicate or real keystrokes
+  document.addEventListener('keypress', function(e) {
+    if (_cl.length > 0 && !e.ctrlKey && !e.altKey && !e.metaKey && (e.key || '').length === 1) {
+      e.preventDefault(); e.stopPropagation();
+    }
+  }, true);
+
+  document.addEventListener('keyup', function(e) {
+    tkeys[e.code || e.key] = false;
+    if (_cl.length > 0 && !e.ctrlKey && !e.altKey && !e.metaKey && (e.key || '').length === 1) {
+      e.preventDefault(); e.stopPropagation();
+    }
+  }, true);
 
 })();
 </script>
