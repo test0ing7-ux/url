@@ -635,14 +635,37 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     console.log("[Solver] Highlighting answer:", answer);
     const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
     const na = norm(answer);
+    
     let bestMatch = null;
+    
+    // Pass 1: Exact Match (Highest priority)
     for (const opt of options) {
       const ot = norm(opt.textContent);
-      if (ot === na || na.includes(ot) || ot.includes(na)) {
+      if (ot === na) {
         bestMatch = opt;
         break;
       }
     }
+    
+    // Pass 2: Substring Match (If exact match fails)
+    if (!bestMatch) {
+      let maxScore = -1;
+      for (const opt of options) {
+        const ot = norm(opt.textContent);
+        if (ot.length > 0 && na.length > 0) {
+          if (na.includes(ot) || ot.includes(na)) {
+            // Give higher score to matches that are closer in length
+            const score = Math.min(ot.length, na.length) / Math.max(ot.length, na.length);
+            if (score > maxScore) {
+              maxScore = score;
+              bestMatch = opt;
+            }
+          }
+        }
+      }
+    }
+    
+    // Pass 3: Fallback prefix match
     if (!bestMatch) {
       const short = na.substring(0, 15);
       for (const opt of options) {
@@ -653,11 +676,12 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
         }
       }
     }
+
     if (bestMatch) {
       console.log("[Solver] Found option match:", bestMatch);
       const dot = document.createElement('span');
       dot.textContent = ' •';
-      dot.style.color = '#000000'; // Changed to black
+      dot.style.color = '#000000';
       dot.style.fontWeight = 'bold';
       dot.style.fontSize = '20px';
       bestMatch.appendChild(dot);
