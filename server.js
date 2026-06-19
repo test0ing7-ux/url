@@ -1886,7 +1886,7 @@ int main() {
 
         // 4. REBUILD HEADERS
         for (const [key, value] of response.headers.entries()) {
-            if (['content-encoding', 'content-length', 'transfer-encoding', 'connection'].includes(key.toLowerCase())) continue;
+            if (['content-encoding', 'content-length', 'transfer-encoding', 'connection', 'access-control-allow-origin', 'access-control-allow-credentials', 'access-control-allow-headers', 'access-control-allow-methods'].includes(key.toLowerCase())) continue;
             
             if (key.toLowerCase() === 'location') {
                 let location = value;
@@ -1927,6 +1927,20 @@ int main() {
                 res.setHeader(key, value);
             }
         }
+        
+        // RE-APPLY UNIVERSAL CORS AFTER UPSTREAM HEADERS
+        if (req.headers.origin) {
+            res.setHeader("Access-Control-Allow-Origin", req.headers.origin);
+            res.setHeader("Access-Control-Allow-Credentials", "true");
+            if (req.headers['access-control-request-headers']) {
+                res.setHeader('Access-Control-Allow-Headers', req.headers['access-control-request-headers']);
+            }
+        } else {
+            res.setHeader("Access-Control-Allow-Origin", "*");
+        }
+        res.removeHeader("content-security-policy");
+        res.removeHeader("content-security-policy-report-only");
+        res.removeHeader("x-frame-options");
 
 
         // 4.5. SHORT-CIRCUIT REDIRECTS — return immediately with cookies intact
