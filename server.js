@@ -1801,30 +1801,26 @@ int main() {
         const response = await fetch(fetchUrl, fetchOptions);
         const contentType = response.headers.get("content-type") || "";
 
-        // 3.5. SMART REDIRECT HANDLER
-        if ([301, 302, 303, 307, 308].includes(response.status)) {
-            let location = response.headers.get("location");
-            if (location) {
-                try {
-                    const absLocation = new URL(location, fetchUrl).href;
-                    if (shouldBypass(absLocation)) {
-                        return res.redirect(response.status === 301 ? 301 : 302, absLocation);
-                    }
-                    if (proxyDomain) {
-                        location = getTargetProxyUrl(absLocation, proxyDomain);
-                    } else {
-                        location = '/fetch/' + absLocation;
-                    }
-                } catch(e) {}
-                return res.redirect(response.status === 301 ? 301 : 302, location);
-            }
-        }
-
         // 4. REBUILD HEADERS
         for (const [key, value] of response.headers.entries()) {
             if (['content-encoding', 'content-length', 'transfer-encoding', 'connection'].includes(key.toLowerCase())) continue;
             
-            if (key.toLowerCase() === 'set-cookie') {
+            if (key.toLowerCase() === 'location') {
+                let location = value;
+                try {
+                    const absLocation = new URL(location, fetchUrl).href;
+                    if (!shouldBypass(absLocation)) {
+                        if (proxyDomain) {
+                            location = getTargetProxyUrl(absLocation, proxyDomain);
+                        } else {
+                            location = '/fetch/' + absLocation;
+                        }
+                    } else {
+                        location = absLocation;
+                    }
+                } catch(e) {}
+                res.setHeader('Location', location);
+            } else if (key.toLowerCase() === 'set-cookie') {
                 if (response.headers.getSetCookie) {
                     const cookies = response.headers.getSetCookie();
                     const rewrittenCookies = cookies.map(c => c.replace(/domain=[^;]+;?/gi, ""));
