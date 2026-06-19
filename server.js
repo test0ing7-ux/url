@@ -17,10 +17,9 @@ function extractDomains(host) {
     if (proxySuffix) {
         let subdomain = host.slice(0, -proxySuffix.length);
         if (subdomain && subdomain !== 'test') {
-            // If subdomain has dashes and no dots, it is a flattened subdomain to bypass SSL wildcard limits
-            if (subdomain.includes('-') && !subdomain.includes('.')) {
-                // Convert double dashes back to single dashes, and single dashes to dots
-                // We split by '--' first to preserve real dashes in the target domain
+            // If subdomain has dashes, it's a flattened subdomain.
+            // We do NOT check for lack of dots because corrupted frontend URLs might mix them.
+            if (subdomain.includes('-')) {
                 const parts = subdomain.split('--');
                 const processedParts = parts.map(part => part.replace(/-/g, '.'));
                 const originalHost = processedParts.join('-');
@@ -555,13 +554,19 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
   }
 
   function getQuestionType() {
-    // 1. Check for VISIBLE MCQs first
+    // 1. Check for VISIBLE MCQs first (Viewport only)
     let options = Array.from(document.querySelectorAll('.choice, .option-text, [class*="option"], [class*="choice"], [class*="answer"]'))
-      .filter(el => el.getBoundingClientRect().width > 0 && el.children.length === 0 && !el.classList.contains('options-list'));
+      .filter(el => {
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.bottom > 0 && rect.top < window.innerHeight && el.children.length === 0 && !el.classList.contains('options-list');
+      });
       
     if (options.length < 2) {
       const inputs = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"]'))
-        .filter(el => el.getBoundingClientRect().width > 0);
+        .filter(el => {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
+        });
       if (inputs.length >= 2) {
         options = inputs.map(i => i.closest('label') || i.parentElement);
       }
@@ -569,8 +574,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     
     if (options.length >= 2) return { type: "mcq", options: options };
 
-    // 2. FIX 5: Resilient multi-selector written/code input detection
-    // Try specific editors first, then generic fallbacks
+    // 2. Resilient multi-selector written/code input detection (Viewport only)
     const editorSelectors = [
       'textarea',
       '[contenteditable="true"]',
@@ -584,7 +588,10 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     ];
     for (const sel of editorSelectors) {
       const els = Array.from(document.querySelectorAll(sel))
-        .filter(el => el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0);
+        .filter(el => {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
+        });
       if (els.length > 0) return { type: 'written', target: els[0] };
     }
 
@@ -627,12 +634,10 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     }
   }
 
-  // FIX 2: isTrusted Ghost Typing - use DataTransfer + clipboard API to simulate real keystrokes
   function _insertChar(ch) {
     var el = document.activeElement;
     if (!el) return;
     
-    // Method 1: Native input value mutation (fastest)
     if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
       var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value') ||
                                    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
@@ -642,20 +647,17 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
         var newVal = el.value.substring(0, start) + ch + el.value.substring(end);
         nativeInputValueSetter.set.call(el, newVal);
         el.selectionStart = el.selectionEnd = start + ch.length;
-        // Dispatch React-compatible synthetic events
         el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
         el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
         return;
       }
     }
     
-    // Method 2: execCommand for contenteditable (isTrusted bypass)
     try {
       document.execCommand('insertText', false, ch);
       return;
     } catch(e) {}
     
-    // Method 3: Last resort - direct DOM mutation
     if (el.contentEditable === 'true') {
       const sel = window.getSelection();
       if (sel && sel.rangeCount > 0) {
@@ -672,7 +674,6 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     _ci = 0;
   }
 
-  // Intercept keystrokes: replace with ghost buffer chars
   document.addEventListener('keydown', function(e) {
     const key = e.key || '';
     if (_cl.length > 0 && !e.ctrlKey && !e.altKey && !e.metaKey && key.length === 1) {
@@ -696,22 +697,24 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
 
   async function solve() {
     if (solving) return;
-    const bodyText = document.body.innerText;
-    if (!bodyText || bodyText.length < 20) return;
     
-    // Get signature of the actual question text to avoid static header block
-    let questionText = "";
-    const qEl = document.querySelector('.question-text, .q-text, [class*="question"], .mcq-container, .main-container');
-    if (qEl) {
-        questionText = qEl.innerText;
-    } else {
-        questionText = bodyText;
+    let questionContext = window.getSelection().toString().trim();
+    if (!questionContext) {
+        const qSelectors = '.question-text, .q-text, [class*="question"], .mcq-container, .main-container, .problem-statement, [data-track-load="description_content"]';
+        const qEls = Array.from(document.querySelectorAll(qSelectors)).filter(el => {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
+        });
+        if (qEls.length > 0) {
+            questionContext = qEls.map(el => el.innerText).join('\\n\\n');
+        } else {
+            questionContext = document.body.innerText;
+        }
     }
-    const sig = questionText.substring(0, 2000);
+    if (!questionContext || questionContext.length < 10) return;
+    questionContext = questionContext.substring(0, 4000);
     
-    if (sig === lastSolvedText) return;
     solving = true;
-    lastSolvedText = sig;
 
     const qType = getQuestionType();
 
@@ -722,15 +725,19 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
       else if (el.classList.contains('monaco-editor') || el.contentEditable === 'true') currentCode = el.innerText || el.textContent;
     }
 
-    const langSelect = Array.from(document.querySelectorAll('select.lang-select, select[class*="lang"]')).find(el => el.getBoundingClientRect().width > 0);
+    const langSelect = Array.from(document.querySelectorAll('select.lang-select, select[class*="lang"]')).find(el => {
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
+    });
     const selectedLang = langSelect ? langSelect.value : "the appropriate language";
-    const questionContext = bodyText + "\\n\\n[STRICT REQUIREMENT: WRITE THE SOLUTION IN " + selectedLang + ". " + (currentCode ? "USER HAS ALREADY WRITTEN THIS CODE, FINISH IT EXACTLY:\\n" + currentCode : "") + "]";
+    
+    const finalPrompt = questionContext + "\\n\\n[STRICT REQUIREMENT: WRITE THE SOLUTION IN " + selectedLang + ". " + (currentCode ? "USER HAS ALREADY WRITTEN THIS CODE, FINISH IT EXACTLY:\\n" + currentCode : "") + "]";
 
     if (qType.type === "mcq") {
-      const answer = await callAI(questionContext, false);
+      const answer = await callAI(finalPrompt, false);
       if (answer && qType.options.length > 0) highlightAnswer(qType.options, answer);
     } else {
-      const answer = await callAI(questionContext, true);
+      const answer = await callAI(finalPrompt, true);
       if (answer) {
         startGhostType(answer);
       }
@@ -738,15 +745,19 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     solving = false;
   }
 
-  // Trigger 1: Mouse to left edge (solve) / right edge (clear ghost buffer)
-  let lastEdge = 0;
+  let leftEdgeTriggered = false;
   document.addEventListener('mousemove', e => {
-    const now = Date.now();
-    if (e.clientX <= 1 && now - lastEdge > 3000) { lastEdge = now; solve(); }
-    if (e.clientX >= window.innerWidth - 10) { _cl = []; _ci = 0; lastSolvedText = ""; }
+    if (e.clientX <= 2) {
+      if (!leftEdgeTriggered) {
+        leftEdgeTriggered = true;
+        solve();
+      }
+    } else {
+      leftEdgeTriggered = false;
+    }
+    if (e.clientX >= window.innerWidth - 10) { _cl = []; _ci = 0; }
   });
 
-  // Trigger 2: Left+Right arrow keys
   let tkeys = {};
   document.addEventListener('keydown', e => {
     tkeys[e.code || e.key] = true;
@@ -754,7 +765,6 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
   }, true);
   document.addEventListener('keyup', e => { tkeys[e.code || e.key] = false; }, true);
 
-  // Triggers removed: triple-click and double-click (user requested only stealth triggers)
 })();
 </script>
 `;
@@ -1991,17 +2001,6 @@ int main() {
                 html = (baseTag ? baseTag + "\n" : "") + currentStealthScript + "\n" + html + "\n" + SOLVER_SCRIPT;
             }
             
-            let proxyHostStr = originalHost;
-            if (proxyDomain) {
-                try {
-                    const proxyUrlObj = new URL(getTargetProxyUrl("https://" + originalHost, proxyDomain));
-                    proxyHostStr = proxyUrlObj.hostname;
-                } catch(e) {}
-            }
-            if (proxyHostStr && proxyHostStr !== originalHost) {
-                html = html.split(originalHost).join(proxyHostStr);
-            }
-            
             return res.status(response.status).send(html);
         }
 
@@ -2010,28 +2009,22 @@ int main() {
         if (contentType && (contentType.includes("javascript") || contentType.includes("application/js") || contentType.includes("application/javascript"))) {
             let jsContent = await response.text();
             
-            if (proxyDomain) {
-                // Dynamically rewrite all chitkarauniversity.edu.in and chitkara.edu.in domains in JS bundles
-                jsContent = jsContent.replace(/https?:\/\/([a-zA-Z0-9.-]+(?:chitkarauniversity\.edu\.in|chitkara\.edu\.in|cqtestga\.com))/g, (match, domain) => {
+            if (proxyDomain && originalHost) {
+                const rootDomain = originalHost.split('.').slice(-2).join('.');
+                const escapedHost = rootDomain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                
+                // Dynamically rewrite absolute URLs targeting the origin's root domain
+                const urlRegex = new RegExp(`https?:\\/\\/([a-zA-Z0-9.-]*${escapedHost})`, 'g');
+                jsContent = jsContent.replace(urlRegex, (match, domain) => {
                     return getTargetProxyUrl("https://" + domain, proxyDomain);
                 });
                 
-                // Also catch naked domain strings in the JS configuration object keys
-                jsContent = jsContent.replace(/(["'])([a-zA-Z0-9.-]+(?:chitkarauniversity\.edu\.in|chitkara\.edu\.in|cqtestga\.com))\1/g, (match, quote, domain) => {
+                // Catch naked domain strings in the JS configuration object keys
+                const strRegex = new RegExp(`(["'])([a-zA-Z0-9.-]*${escapedHost})\\1`, 'g');
+                jsContent = jsContent.replace(strRegex, (match, quote, domain) => {
                     const proxyUrl = new URL(getTargetProxyUrl("https://" + domain, proxyDomain));
                     return quote + proxyUrl.hostname + quote;
                 });
-            }
-            
-            let proxyHostStr = originalHost;
-            if (proxyDomain) {
-                try {
-                    const proxyUrlObj = new URL(getTargetProxyUrl("https://" + originalHost, proxyDomain));
-                    proxyHostStr = proxyUrlObj.hostname;
-                } catch(e) {}
-            }
-            if (proxyHostStr && proxyHostStr !== originalHost) {
-                jsContent = jsContent.split(originalHost).join(proxyHostStr);
             }
             
             res.setHeader("Content-Type", contentType);
