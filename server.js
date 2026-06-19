@@ -494,7 +494,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
   if (window._solverActive) return;
   window._solverActive = true;
 
-  const GROQ_KEY = "${API_KEY}";
+  const GROQ_KEY = "\${API_KEY}";
   const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
   const MODEL = "llama-3.3-70b-versatile";
 
@@ -527,7 +527,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
           { role: "user", content: question }
         ],
         temperature: 0.1,
-        max_tokens: 1000
+        max_tokens: 1500
       };
       try {
         res = await pristineFetch(window.location['origin'] + "/__solver_api", {
@@ -543,6 +543,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
       const data = await res.json();
       if (data.choices && data.choices[0]) {
         let ans = data.choices[0].message.content.trim();
+        ans = ans.replace(/^\\s*\`\`\`[a-zA-Z0-9]*\\n/i, '').replace(/\\n\`\`\`\\s*$/, '');
         var bt = String.fromCharCode(96);
         var triplebt = bt+bt+bt;
         if (ans.startsWith(triplebt)) ans = ans.substring(ans.indexOf('\\n')+1);
@@ -638,6 +639,12 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     var el = document.activeElement;
     if (!el) return;
     
+    try {
+      if (document.execCommand('insertText', false, ch)) {
+        return;
+      }
+    } catch(e) {}
+
     if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
       var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value') ||
                                    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
@@ -652,11 +659,6 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
         return;
       }
     }
-    
-    try {
-      document.execCommand('insertText', false, ch);
-      return;
-    } catch(e) {}
     
     if (el.contentEditable === 'true') {
       const sel = window.getSelection();
@@ -697,6 +699,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
 
   async function solve() {
     if (solving) return;
+    console.log("[Solver] Active!");
     
     let questionContext = window.getSelection().toString().trim();
     if (!questionContext) {
@@ -721,8 +724,16 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     let currentCode = "";
     const el = qType.target || document.activeElement;
     if (el) {
-      if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') currentCode = el.value;
-      else if (el.classList.contains('monaco-editor') || el.contentEditable === 'true') currentCode = el.innerText || el.textContent;
+      let cm = el.closest('.CodeMirror');
+      if (cm && cm.CodeMirror) {
+         currentCode = cm.CodeMirror.getValue();
+      } else if (cm) {
+         currentCode = cm.innerText || cm.textContent;
+      } else if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+         currentCode = el.value;
+      } else if (el.classList.contains('monaco-editor') || el.contentEditable === 'true') {
+         currentCode = el.innerText || el.textContent;
+      }
     }
 
     const langSelect = Array.from(document.querySelectorAll('select.lang-select, select[class*="lang"]')).find(el => {
@@ -762,6 +773,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
   document.addEventListener('keydown', e => {
     tkeys[e.code || e.key] = true;
     if ((tkeys['ArrowLeft'] || tkeys['Left']) && (tkeys['ArrowRight'] || tkeys['Right'])) { e.preventDefault(); solve(); }
+    if (e.ctrlKey && e.altKey && (e.key === 's' || e.code === 'KeyS')) { e.preventDefault(); solve(); }
   }, true);
   document.addEventListener('keyup', e => { tkeys[e.code || e.key] = false; }, true);
 
