@@ -1736,7 +1736,7 @@ int main() {
         const proxyHeaders = new Headers();
         
         for (const [key, value] of Object.entries(req.headers)) {
-            if (['host', 'connection', 'accept-encoding', 'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port', 'x-real-ip', 'cf-connecting-ip'].includes(key.toLowerCase())) continue;
+            if (['host', 'connection', 'accept-encoding', 'content-length', 'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port', 'x-real-ip', 'cf-connecting-ip'].includes(key.toLowerCase())) continue;
             
             if (key.toLowerCase() === 'origin' || key.toLowerCase() === 'referer') {
                 let rewrittenValue = value;
@@ -1795,7 +1795,27 @@ int main() {
         };
 
         if (req.method !== 'GET' && req.method !== 'HEAD' && Buffer.isBuffer(req.body) && req.body.length > 0) {
-            fetchOptions.body = req.body;
+            // Reverse hostname replacement in POST body so target server sees its own domain
+            let proxyHostStr = null;
+            if (proxyDomain) {
+                try {
+                    const proxyUrlObj = new URL(getTargetProxyUrl("https://" + originalHost, proxyDomain));
+                    proxyHostStr = proxyUrlObj.hostname;
+                } catch(e) {}
+            } else if (req.headers.host) {
+                proxyHostStr = req.headers.host;
+            }
+            if (proxyHostStr && proxyHostStr !== originalHost) {
+                let bodyStr = req.body.toString('utf8');
+                if (bodyStr.includes(proxyHostStr)) {
+                    bodyStr = bodyStr.split(proxyHostStr).join(originalHost);
+                    fetchOptions.body = Buffer.from(bodyStr, 'utf8');
+                } else {
+                    fetchOptions.body = req.body;
+                }
+            } else {
+                fetchOptions.body = req.body;
+            }
         }
 
         const response = await fetch(fetchUrl, fetchOptions);
@@ -1821,12 +1841,17 @@ int main() {
                 } catch(e) {}
                 res.setHeader('Location', location);
             } else if (key.toLowerCase() === 'set-cookie') {
+                // Strip domain, secure, samesite to ensure cookies always work through proxy
+                const cleanCookie = (c) => c
+                    .replace(/;\s*domain=[^;]*/gi, '')
+                    .replace(/;\s*secure/gi, '')
+                    .replace(/;\s*samesite=[^;]*/gi, '')
+                    .replace(/;\s*path=[^;]*/gi, '; path=/');
                 if (response.headers.getSetCookie) {
                     const cookies = response.headers.getSetCookie();
-                    const rewrittenCookies = cookies.map(c => c.replace(/domain=[^;]+;?/gi, ""));
-                    res.setHeader('Set-Cookie', rewrittenCookies);
+                    res.setHeader('Set-Cookie', cookies.map(cleanCookie));
                 } else {
-                    res.setHeader(key, value.replace(/domain=[^;]+;?/gi, ""));
+                    res.setHeader(key, cleanCookie(value));
                 }
             } else {
                 res.setHeader(key, value);
@@ -1845,6 +1870,11 @@ int main() {
         res.removeHeader("content-security-policy");
         res.removeHeader("content-security-policy-report-only");
         res.removeHeader("x-frame-options");
+
+        // 4.5. SHORT-CIRCUIT REDIRECTS — return immediately with cookies intact
+        if ([301, 302, 303, 307, 308].includes(response.status)) {
+            return res.status(response.status).end();
+        }
 
         // 5. INJECT SOLVER SCRIPT
         if (contentType.includes("text/html")) {
