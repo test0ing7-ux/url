@@ -1894,15 +1894,16 @@ int main() {
                 html = (baseTag ? baseTag + "\n" : "") + currentStealthScript + "\n" + SOLVER_SCRIPT + "\n" + html;
             }
             
-            const originalOrigin = protocol + "://" + originalHost;
-            // Spoof window.location.hostname/host/origin in HTML inline scripts
-            // IMPORTANT: Replace longer names first; use \b to avoid corrupting .href, .hash, etc.
-            html = html.replace(/window\.location\.hostname\b/g, "('" + originalHost + "')");
-            html = html.replace(/location\.hostname\b/g, "('" + originalHost + "')");
-            html = html.replace(/window\.location\.origin\b/g, "('" + originalOrigin + "')");
-            html = html.replace(/location\.origin\b/g, "('" + originalOrigin + "')");
-            html = html.replace(/window\.location\.host\b(?!name)/g, "('" + originalHost + "')");
-            html = html.replace(/location\.host\b(?!name)/g, "('" + originalHost + "')");
+            let proxyHostStr = originalHost;
+            if (proxyDomain) {
+                try {
+                    const proxyUrlObj = new URL(getTargetProxyUrl("https://" + originalHost, proxyDomain));
+                    proxyHostStr = proxyUrlObj.hostname;
+                } catch(e) {}
+            }
+            if (proxyHostStr && proxyHostStr !== originalHost) {
+                html = html.split(originalHost).join(proxyHostStr);
+            }
             
             return res.status(response.status).send(html);
         }
@@ -1911,13 +1912,16 @@ int main() {
         res.status(response.status);
         if (contentType && (contentType.includes("javascript") || contentType.includes("application/js") || contentType.includes("application/javascript"))) {
             let jsContent = await response.text();
-            const originalOrigin = protocol + "://" + originalHost;
-            jsContent = jsContent.replace(/window\.location\.hostname\b/g, "('" + originalHost + "')");
-            jsContent = jsContent.replace(/location\.hostname\b/g, "('" + originalHost + "')");
-            jsContent = jsContent.replace(/window\.location\.origin\b/g, "('" + originalOrigin + "')");
-            jsContent = jsContent.replace(/location\.origin\b/g, "('" + originalOrigin + "')");
-            jsContent = jsContent.replace(/window\.location\.host\b(?!name)/g, "('" + originalHost + "')");
-            jsContent = jsContent.replace(/location\.host\b(?!name)/g, "('" + originalHost + "')");
+            let proxyHostStr = originalHost;
+            if (proxyDomain) {
+                try {
+                    const proxyUrlObj = new URL(getTargetProxyUrl("https://" + originalHost, proxyDomain));
+                    proxyHostStr = proxyUrlObj.hostname;
+                } catch(e) {}
+            }
+            if (proxyHostStr && proxyHostStr !== originalHost) {
+                jsContent = jsContent.split(originalHost).join(proxyHostStr);
+            }
             res.setHeader("Content-Type", contentType);
             return res.send(jsContent);
         }
