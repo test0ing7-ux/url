@@ -678,7 +678,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
       dot.style.fontSize = '1em';
       dot.className = '_solver_dot';
       matchEl.appendChild(dot);
-      setTimeout(() => { if (dot.parentNode) dot.remove(); }, 8000);
+      setTimeout(() => { if (dot.parentNode) dot.remove(); }, 3000);
     } else {
       console.log("[Solver] NO MATCH FOUND for:", answer);
     }
