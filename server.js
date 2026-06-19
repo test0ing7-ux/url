@@ -1360,8 +1360,9 @@ app.all('*', async (req, res) => {
         }
 
         const parsedTarget = new URL(targetUrl);
+        parsedTarget.pathname = parsedTarget.pathname.replace(/\/{2,}/g, '/');
         originalHost = parsedTarget.host;
-        const fetchUrl = targetUrl;
+        const fetchUrl = parsedTarget.href;
 
         // SPY LOG: College Wi-Fi Router (POST-stealth = what they actually see)
         // PRE-stealth = what they WOULD see if you connected directly without proxy
