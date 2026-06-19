@@ -1741,8 +1741,21 @@ int main() {
             if (key.toLowerCase() === 'origin' || key.toLowerCase() === 'referer') {
                 let rewrittenValue = value;
                 rewrittenValue = rewrittenValue.replace('/fetch/', '/');
-                if (req.headers.host) {
-                    rewrittenValue = rewrittenValue.split(req.headers.host).join(originalHost);
+                try {
+                    const urlObj = new URL(rewrittenValue);
+                    const { originalHost: originOriginalHost } = extractDomains(urlObj.hostname);
+                    if (originOriginalHost) {
+                        urlObj.hostname = originOriginalHost;
+                        rewrittenValue = urlObj.href;
+                        // remove trailing slash if original value didn't have it
+                        if (!value.endsWith('/') && rewrittenValue.endsWith('/')) {
+                            rewrittenValue = rewrittenValue.slice(0, -1);
+                        }
+                    }
+                } catch(e) {
+                    if (req.headers.host) {
+                        rewrittenValue = rewrittenValue.split(req.headers.host).join(originalHost);
+                    }
                 }
                 proxyHeaders.set(key, rewrittenValue);
             } else {
@@ -1980,16 +1993,26 @@ int main() {
         res.status(response.status);
         if (contentType && (contentType.includes("javascript") || contentType.includes("application/js") || contentType.includes("application/javascript"))) {
             let jsContent = await response.text();
-            let proxyHostStr = originalHost;
+            
             if (proxyDomain) {
-                try {
-                    const proxyUrlObj = new URL(getTargetProxyUrl("https://" + originalHost, proxyDomain));
-                    proxyHostStr = proxyUrlObj.hostname;
-                } catch(e) {}
+                // Dynamically rewrite all chitkarauniversity.edu.in and chitkara.edu.in domains in JS bundles
+                // This fixes the hardcoded GEt configuration object that breaks login on the testpad frontend.
+                jsContent = jsContent.replace(/https?:\/\/([a-zA-Z0-9.-]+(?:chitkarauniversity\.edu\.in|chitkara\.edu\.in|cqtestga\.com))/g, (match, domain) => {
+                    return getTargetProxyUrl("https://" + domain, proxyDomain);
+                });
+                
+                // Also catch naked domain strings in the JS configuration object keys
+                jsContent = jsContent.replace(/(["'])([a-zA-Z0-9.-]+(?:chitkarauniversity\.edu\.in|chitkara\.edu\.in|cqtestga\.com))\1/g, (match, quote, domain) => {
+                    const proxyUrl = new URL(getTargetProxyUrl("https://" + domain, proxyDomain));
+                    return quote + proxyUrl.hostname + quote;
+                });
+            } else {
+                let proxyHostStr = originalHost;
+                if (proxyHostStr && proxyHostStr !== originalHost) {
+                    jsContent = jsContent.split(originalHost).join(proxyHostStr);
+                }
             }
-            if (proxyHostStr && proxyHostStr !== originalHost) {
-                jsContent = jsContent.split(originalHost).join(proxyHostStr);
-            }
+            
             res.setHeader("Content-Type", contentType);
             return res.send(jsContent);
         }
