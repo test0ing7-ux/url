@@ -99,7 +99,6 @@ function rewriteUrlToProxy(url, proxyDomain) {
 const getStealthScript = () => `
 <script id="proxy-stealth">
 (function() {
-(function() {
     try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     (function() {
         var _define = undefined;
