@@ -641,7 +641,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     // Pass 1: Exact Match (Highest priority)
     for (const opt of options) {
       const ot = norm(opt.textContent);
-      if (ot === na) {
+      if (ot && ot === na) {
         bestMatch = opt;
         break;
       }
@@ -665,14 +665,17 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
       }
     }
     
-    // Pass 3: Fallback prefix match
+    // Pass 3: Fallback Number Match (Extract digits and compare)
     if (!bestMatch) {
-      const short = na.substring(0, 15);
-      for (const opt of options) {
-        const ot = norm(opt.textContent);
-        if (ot.startsWith(short) || short.startsWith(ot)) {
-          bestMatch = opt;
-          break;
+      const ansNums = answer.match(/\d+/g);
+      if (ansNums && ansNums.length > 0) {
+        const ansSig = ansNums.join(',');
+        for (const opt of options) {
+          const optNums = opt.textContent.match(/\d+/g);
+          if (optNums && optNums.join(',') === ansSig) {
+            bestMatch = opt;
+            break;
+          }
         }
       }
     }
