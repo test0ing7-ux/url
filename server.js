@@ -514,7 +514,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     pristineFetch = f.contentWindow.fetch || window.fetch;
   } catch(e) {}
 
-  const MCQ_PROMPT = "You are an expert exam solver. Given a multiple-choice question with options, respond with ONLY the correct option text exactly as written. No explanation, no prefix, just the exact option text.";
+  const MCQ_PROMPT = "You are an expert exam solver. Given a multiple-choice question with options, respond with ONLY the text of the correct option. STRICT RULE: Read ALL options carefully. Eliminate wrong ones first. The answer MUST be the EXACT text of one option — copy it character by character. DO NOT paraphrase. DO NOT include prefixes like 'Option A' or 'The correct answer is'. Output NOTHING BUT the exact option text.";
   const WRITE_PROMPT = "You are an expert exam solver. For code questions, you MUST write COMPLETE, COMPILABLE code in the language the user started. Handle ALL edge cases. STRICT RULE: Output ONLY raw code. NEVER use markdown formatting. NEVER wrap code in 'backticks'. NEVER explain. Just the exact code text to be typed.";
 
   async function callAI(question, isWritten) {
@@ -657,7 +657,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
       console.log("[Solver] Found option match:", bestMatch);
       const dot = document.createElement('span');
       dot.textContent = ' •';
-      dot.style.color = '#ff0000';
+      dot.style.color = '#000000'; // Changed to black
       dot.style.fontWeight = 'bold';
       dot.style.fontSize = '20px';
       bestMatch.appendChild(dot);
