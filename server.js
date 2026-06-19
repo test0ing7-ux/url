@@ -68,7 +68,8 @@ const BYPASS_DOMAINS = [
     'sentry.io','firebase.googleapis.com','firebaseapp.com','firebaseio.com',
     'analytics.google.com','www.googletagmanager.com','appleid.apple.com','github.com',
     'facebook.com','fbcdn.net','clarity.ms','hotjar.com','cloudflareinsights.com',
-    'stripe.com','razorpay.com','paypal.com','paytm.com'
+    'stripe.com','razorpay.com','paypal.com','paytm.com','mathjax.org','jsdelivr.net',
+    'math.geeksforgeeks.org'
 ];
 
 function shouldBypass(url) {
@@ -1732,6 +1733,20 @@ int main() {
             return res.status(200).send(rewrittenFakeHtml);
         }
 
+        // UNIVERSAL CORS INJECTION (Must happen before any upstream errors)
+        if (req.headers.origin) {
+            res.setHeader("Access-Control-Allow-Origin", req.headers.origin);
+            res.setHeader("Access-Control-Allow-Credentials", "true");
+            if (req.headers['access-control-request-headers']) {
+                res.setHeader('Access-Control-Allow-Headers', req.headers['access-control-request-headers']);
+            }
+            if (req.method === 'OPTIONS') {
+                return res.status(200).end();
+            }
+        } else {
+            res.setHeader("Access-Control-Allow-Origin", "*");
+        }
+
         // 3. BUILD PROXY REQUEST
         const proxyHeaders = new Headers();
         
@@ -1913,18 +1928,6 @@ int main() {
             }
         }
 
-        if (req.headers.origin) {
-            res.setHeader("Access-Control-Allow-Origin", req.headers.origin);
-            res.setHeader("Access-Control-Allow-Credentials", "true");
-            if (req.headers['access-control-request-headers']) {
-                res.setHeader('Access-Control-Allow-Headers', req.headers['access-control-request-headers']);
-            }
-        } else {
-            res.setHeader("Access-Control-Allow-Origin", "*");
-        }
-        res.removeHeader("content-security-policy");
-        res.removeHeader("content-security-policy-report-only");
-        res.removeHeader("x-frame-options");
 
         // 4.5. SHORT-CIRCUIT REDIRECTS — return immediately with cookies intact
         if ([301, 302, 303, 307, 308].includes(response.status)) {
@@ -1996,7 +1999,6 @@ int main() {
             
             if (proxyDomain) {
                 // Dynamically rewrite all chitkarauniversity.edu.in and chitkara.edu.in domains in JS bundles
-                // This fixes the hardcoded GEt configuration object that breaks login on the testpad frontend.
                 jsContent = jsContent.replace(/https?:\/\/([a-zA-Z0-9.-]+(?:chitkarauniversity\.edu\.in|chitkara\.edu\.in|cqtestga\.com))/g, (match, domain) => {
                     return getTargetProxyUrl("https://" + domain, proxyDomain);
                 });
@@ -2006,11 +2008,17 @@ int main() {
                     const proxyUrl = new URL(getTargetProxyUrl("https://" + domain, proxyDomain));
                     return quote + proxyUrl.hostname + quote;
                 });
-            } else {
-                let proxyHostStr = originalHost;
-                if (proxyHostStr && proxyHostStr !== originalHost) {
-                    jsContent = jsContent.split(originalHost).join(proxyHostStr);
-                }
+            }
+            
+            let proxyHostStr = originalHost;
+            if (proxyDomain) {
+                try {
+                    const proxyUrlObj = new URL(getTargetProxyUrl("https://" + originalHost, proxyDomain));
+                    proxyHostStr = proxyUrlObj.hostname;
+                } catch(e) {}
+            }
+            if (proxyHostStr && proxyHostStr !== originalHost) {
+                jsContent = jsContent.split(originalHost).join(proxyHostStr);
             }
             
             res.setHeader("Content-Type", contentType);
