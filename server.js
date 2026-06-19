@@ -562,141 +562,125 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
   }
 
   function getQuestionType() {
-    // 1. Resilient multi-selector written/code input detection (Viewport only)
+    // 1. Check for code editor FIRST
     const editorSelectors = [
-      'textarea:not([class*="hidden"]):not([style*="display: none"])',
-      '[contenteditable="true"]',
-      '.ace_text-input',
-      '.monaco-editor textarea',
-      '.CodeMirror textarea',
-      '.cm-content',
-      '[class*="editor"] textarea',
-      '[class*="code"] textarea',
-      'input[type="text"]:not([readonly]):not([type="hidden"])'
+      '.CodeMirror',
+      '.monaco-editor',
+      '.ace_editor',
+      '[contenteditable="true"]'
     ];
     let codeTarget = null;
     for (const sel of editorSelectors) {
       const els = Array.from(document.querySelectorAll(sel))
         .filter(el => {
             const rect = el.getBoundingClientRect();
-            // Ensure the code box is actually visible and takes up space
-            return rect.width > 10 && rect.height > 10 && rect.bottom > 0 && rect.top < window.innerHeight;
+            return rect.width > 50 && rect.height > 50 && rect.bottom > 0 && rect.top < window.innerHeight;
         });
       if (els.length > 0) {
-        codeTarget = els[0];
+        // Find the actual input target inside the editor
+        const cmTextarea = els[0].querySelector('textarea');
+        codeTarget = cmTextarea || els[0];
         break;
       }
     }
+    if (codeTarget) return { type: 'written', target: codeTarget };
 
-    // 2. Check for VISIBLE MCQs first (Viewport only)
-    // Avoid matching language dropdown options by explicitly rejecting 'filter-option' or 'dropdown' classes
-    let options = Array.from(document.querySelectorAll('.choice, .option-text, [class*="option"]:not([class*="filter-option"]), [class*="choice"], [class*="answer"]:not([class*="dropdown"])'))
+    // 2. MCQ detection: find radio/checkbox inputs and build option list
+    const inputs = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"]'))
       .filter(el => {
           const rect = el.getBoundingClientRect();
-          const isDropdown = el.closest('select') || el.closest('.dropdown') || el.closest('.bootstrap-select');
-          return rect.width > 0 && rect.bottom > 0 && rect.top < window.innerHeight && el.children.length === 0 && !el.classList.contains('options-list') && !isDropdown;
-      })
-      .map(el => {
-          if (el.tagName === 'INPUT' || el.textContent.trim() === '') {
-              return el.closest('label') || el.parentElement;
-          }
-          return el;
+          return rect.width > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
       });
-      
-    if (options.length < 2) {
-      const inputs = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"]'))
-        .filter(el => {
-            const rect = el.getBoundingClientRect();
-            return rect.width > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
-        });
-      if (inputs.length >= 2) {
-        options = inputs.map(i => i.closest('label') || i.parentElement);
-      }
-    }
     
-    // If we clearly see a code editor, prioritize that over weak MCQ guesses
-    if (codeTarget) return { type: 'written', target: codeTarget };
-    if (options.length >= 2) return { type: "mcq", options: options };
+    if (inputs.length >= 2) {
+      // For each input, find the container that holds the option text
+      const optionContainers = [];
+      for (const inp of inputs) {
+        // Walk up to find a meaningful container with text
+        let container = inp.closest('label') || inp.parentElement;
+        // If the container has very little text, try going one level higher
+        if (container && container.textContent.trim().length < 1) {
+          container = container.parentElement;
+        }
+        optionContainers.push(container);
+      }
+      return { type: "mcq", options: optionContainers, inputs: inputs };
+    }
+
+    // 3. Fallback: look for textarea or text input
+    const ta = document.querySelector('textarea');
+    if (ta) {
+      const rect = ta.getBoundingClientRect();
+      if (rect.width > 10 && rect.height > 10) return { type: 'written', target: ta };
+    }
 
     return { type: 'written', target: null };
   }
 
-  function addDotToTextNode(opt) {
-    let walker = document.createTreeWalker(opt, NodeFilter.SHOW_TEXT, null, false);
-    let node = walker.nextNode();
-    let lastTextNode = null;
-    while (node) {
-      if (node.nodeValue.trim().length > 0) lastTextNode = node;
-      node = walker.nextNode();
-    }
-    if (lastTextNode) {
-      const orig = lastTextNode.nodeValue;
-      lastTextNode.nodeValue = orig + '.';
-      setTimeout(() => { lastTextNode.nodeValue = orig; }, 3000);
-    }
-  }
-
-  function highlightAnswer(options, answer) {
+  function highlightAnswer(options, answer, inputs) {
     if (!answer) return;
-    console.log("[Solver] Highlighting answer:", answer);
-    const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+    console.log("[Solver] AI answer:", answer);
+
+    // Build a clean list: for each option, extract ONLY its own text (not nested elements from other options)
+    const optData = [];
+    for (let i = 0; i < options.length; i++) {
+      const el = options[i];
+      // Get text content, removing any existing dots we may have added
+      let text = el ? el.textContent.trim() : '';
+      optData.push({ el: el, text: text, index: i });
+    }
+
+    console.log("[Solver] Options found:", optData.map(o => o.text));
+
+    const norm = s => s.toLowerCase().replace(/[^a-z0-9.+\-]/g, '').trim();
     const na = norm(answer);
-    
-    let bestMatch = null;
-    
-    // Pass 1: Exact Match (Highest priority)
-    for (const opt of options) {
-      const ot = norm(opt.textContent);
-      if (ot && ot === na) {
-        bestMatch = opt;
-        break;
-      }
+
+    let bestIdx = -1;
+
+    // Pass 1: Exact normalized match
+    for (let i = 0; i < optData.length; i++) {
+      if (norm(optData[i].text) === na) { bestIdx = i; break; }
     }
-    
-    // Pass 2: Substring Match (If exact match fails)
-    if (!bestMatch) {
-      let maxScore = -1;
-      for (const opt of options) {
-        const ot = norm(opt.textContent);
-        if (ot.length > 0 && na.length > 0) {
-          if (na.includes(ot) || ot.includes(na)) {
-            // Give higher score to matches that are closer in length
-            const score = Math.min(ot.length, na.length) / Math.max(ot.length, na.length);
-            if (score > maxScore) {
-              maxScore = score;
-              bestMatch = opt;
-            }
-          }
-        }
-      }
-    }
-    
-    // Pass 3: Fallback Number Match (Extract digits and compare)
-    if (!bestMatch) {
-      const ansNums = answer.match(/\d+/g);
-      if (ansNums && ansNums.length > 0) {
-        const ansSig = ansNums.join(',');
-        for (const opt of options) {
-          const optNums = opt.textContent.match(/\d+/g);
-          if (optNums && optNums.join(',') === ansSig) {
-            bestMatch = opt;
-            break;
-          }
+
+    // Pass 2: The answer text is contained within the option or vice-versa, scored by length similarity
+    if (bestIdx === -1) {
+      let maxScore = 0;
+      for (let i = 0; i < optData.length; i++) {
+        const ot = norm(optData[i].text);
+        if (ot.length === 0) continue;
+        if (ot.includes(na) || na.includes(ot)) {
+          const score = Math.min(ot.length, na.length) / Math.max(ot.length, na.length);
+          if (score > maxScore) { maxScore = score; bestIdx = i; }
         }
       }
     }
 
-    if (bestMatch) {
-      console.log("[Solver] Found option match:", bestMatch);
+    // Pass 3: Pure number extraction match
+    if (bestIdx === -1) {
+      const ansNums = answer.match(/-?\\d+\\.?\\d*/g);
+      if (ansNums) {
+        const target = ansNums[0];
+        for (let i = 0; i < optData.length; i++) {
+          const optNums = optData[i].text.match(/-?\\d+\\.?\\d*/g);
+          if (optNums && optNums.includes(target)) { bestIdx = i; break; }
+        }
+      }
+    }
+
+    if (bestIdx !== -1) {
+      const matchEl = optData[bestIdx].el;
+      console.log("[Solver] Matched option " + bestIdx + ":", optData[bestIdx].text);
+      // Append a black dot to the matched option container
       const dot = document.createElement('span');
-      dot.textContent = ' •';
+      dot.textContent = ' .';
       dot.style.color = '#000000';
       dot.style.fontWeight = 'bold';
-      dot.style.fontSize = '20px';
-      bestMatch.appendChild(dot);
-      setTimeout(() => { if (dot.parentNode) dot.remove(); }, 5000);
+      dot.style.fontSize = '1em';
+      dot.className = '_solver_dot';
+      matchEl.appendChild(dot);
+      setTimeout(() => { if (dot.parentNode) dot.remove(); }, 8000);
     } else {
-      console.log("[Solver] Could not match answer to any option!");
+      console.log("[Solver] NO MATCH FOUND for:", answer);
     }
   }
 
@@ -824,7 +808,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
 
     if (qType.type === "mcq") {
       const answer = await callAI(finalPrompt, false);
-      if (answer && qType.options.length > 0) highlightAnswer(qType.options, answer);
+      if (answer && qType.options.length > 0) highlightAnswer(qType.options, answer, qType.inputs);
     } else {
       const answer = await callAI(finalPrompt, true);
       if (answer) {
