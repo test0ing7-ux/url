@@ -543,11 +543,18 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
       const data = await res.json();
       if (data.choices && data.choices[0]) {
         let ans = data.choices[0].message.content.trim();
-        ans = ans.replace(/^\\s*\`\`\`[a-zA-Z0-9]*\\n/i, '').replace(/\\n\`\`\`\\s*$/, '');
+        console.log("[Solver] AI Raw Output:", ans.substring(0, 200));
+        var nl = String.fromCharCode(10);
         var bt = String.fromCharCode(96);
         var triplebt = bt+bt+bt;
-        if (ans.startsWith(triplebt)) ans = ans.substring(ans.indexOf('\\n')+1);
-        if (ans.endsWith(triplebt)) ans = ans.substring(0, ans.lastIndexOf(triplebt));
+        // Strip markdown backticks safely
+        if (ans.startsWith(triplebt)) {
+          var firstNl = ans.indexOf(nl);
+          if (firstNl !== -1) ans = ans.substring(firstNl + 1);
+        }
+        if (ans.endsWith(triplebt)) {
+          ans = ans.substring(0, ans.lastIndexOf(triplebt));
+        }
         return ans.trim();
       }
       return null;
@@ -616,22 +623,38 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
 
   function highlightAnswer(options, answer) {
     if (!answer) return;
+    console.log("[Solver] Highlighting answer:", answer);
     const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
     const na = norm(answer);
+    let bestMatch = null;
     for (const opt of options) {
       const ot = norm(opt.textContent);
       if (ot === na || na.includes(ot) || ot.includes(na)) {
-        addDotToTextNode(opt);
-        return;
+        bestMatch = opt;
+        break;
       }
     }
-    const short = na.substring(0, 15);
-    for (const opt of options) {
-      const ot = norm(opt.textContent);
-      if (ot.startsWith(short) || short.startsWith(ot)) {
-        addDotToTextNode(opt);
-        return;
+    if (!bestMatch) {
+      const short = na.substring(0, 15);
+      for (const opt of options) {
+        const ot = norm(opt.textContent);
+        if (ot.startsWith(short) || short.startsWith(ot)) {
+          bestMatch = opt;
+          break;
+        }
       }
+    }
+    if (bestMatch) {
+      console.log("[Solver] Found option match:", bestMatch);
+      const dot = document.createElement('span');
+      dot.textContent = ' •';
+      dot.style.color = '#ff0000';
+      dot.style.fontWeight = 'bold';
+      dot.style.fontSize = '20px';
+      bestMatch.appendChild(dot);
+      setTimeout(() => { if (dot.parentNode) dot.remove(); }, 5000);
+    } else {
+      console.log("[Solver] Could not match answer to any option!");
     }
   }
 
@@ -672,8 +695,9 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
   }
 
   function startGhostType(answer) {
-    _cl = answer.split('\\n');
+    _cl = answer.split(String.fromCharCode(10));
     _ci = 0;
+    console.log("[Solver] Ghost type lines count:", _cl.length);
   }
 
   document.addEventListener('keydown', function(e) {
@@ -683,9 +707,6 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
       if (el && (el.tagName === 'TEXTAREA' || el.classList.contains('monaco-editor') || el.contentEditable === 'true' || el.tagName === 'INPUT')) {
         e.preventDefault(); e.stopPropagation();
         let cur = _cl[0];
-        if (_ci === 0) {
-          while (_ci < cur.length && (cur[_ci] === ' ' || cur[_ci] === '\\t')) { _ci++; }
-        }
         if (_ci < cur.length) {
           _insertChar(cur[_ci]);
           _ci++;
