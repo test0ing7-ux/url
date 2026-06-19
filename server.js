@@ -1820,9 +1820,19 @@ int main() {
             } else {
                 fetchOptions.body = req.body;
             }
+            if (req.method === 'POST') {
+                console.log(`[POST DEBUG] URL: ${fetchUrl}`);
+                console.log(`[POST DEBUG] Body: ${fetchOptions.body.toString('utf8').substring(0, 500)}`);
+            }
         }
 
         const response = await fetch(fetchUrl, fetchOptions);
+        
+        if (req.method === 'POST') {
+            console.log(`[POST DEBUG] Response Status: ${response.status}`);
+            console.log(`[POST DEBUG] Response Headers:`, JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2));
+        }
+
         const contentType = response.headers.get("content-type") || "";
 
         // 4. REBUILD HEADERS
