@@ -100,88 +100,43 @@ const getStealthScript = () => `
 <script id="proxy-stealth">
 (function() {
     try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
-    (function() {
-        var _define = undefined;
-        var _require = undefined;
-        try {
-            Object.defineProperty(Window.prototype, 'define', {
-                get: function() { return _define; },
-                set: function(val) {
-                    if (typeof val === 'function') {
-                        _define = val;
-                    }
-                },
-                configurable: true
-            });
-            Object.defineProperty(Window.prototype, 'require', {
-                get: function() { return _require; },
-                set: function(val) {
-                    if (typeof val === 'function') {
-                        _require = val;
-                    }
-                },
-                configurable: true
-            });
-        } catch (e) {
-            try {
-                Object.defineProperty(window, 'define', {
-                    get: function() { return _define; },
-                    set: function(val) {
-                        if (typeof val === 'function') {
-                            _define = val;
-                        }
-                    },
-                    configurable: true
-                });
-                Object.defineProperty(window, 'require', {
-                    get: function() { return _require; },
-                    set: function(val) {
-                        if (typeof val === 'function') {
-                            _require = val;
-                        }
-                    },
-                    configurable: true
-                });
-            } catch (ex) {}
-        }
+    // Suppress non-fatal AMD loader errors (css.js plugin)
+    window.onerror = (function(origOnError) {
+        return function(msg, src, line, col, err) {
+            if (src && (src.indexOf('css.js') !== -1 || src.indexOf('vs/css') !== -1)) return true;
+            if (msg && typeof msg === 'string' && msg.indexOf('define') !== -1) return true;
+            if (origOnError) return origOnError.apply(this, arguments);
+            return false;
+        };
+    })(window.onerror);
 
-        try {
-            var origDefineProperty = Object.defineProperty;
-            Object.defineProperty = function(obj, prop, descriptor) {
-                if (obj === window && (prop === 'define' || prop === 'require')) {
-                    if (descriptor) {
-                        var val = descriptor.value;
-                        if (typeof val === 'function') {
-                            if (prop === 'define') _define = val;
-                            else _require = val;
-                        }
-                    }
-                    return obj;
-                }
-                return origDefineProperty.apply(this, arguments);
-            };
-            var origDefineProperties = Object.defineProperties;
-            Object.defineProperties = function(obj, props) {
-                if (obj === window && props) {
-                    var newProps = null;
-                    if (props.define) {
-                        var val = props.define.value;
-                        if (typeof val === 'function') _define = val;
-                        newProps = newProps || Object.assign({}, props);
-                        delete newProps.define;
-                    }
-                    if (props.require) {
-                        var val = props.require.value;
-                        if (typeof val === 'function') _require = val;
-                        newProps = newProps || Object.assign({}, props);
-                        delete newProps.require;
-                    }
-                    return origDefineProperties.call(this, obj, newProps || props);
-                }
-                return origDefineProperties.apply(this, arguments);
-            };
-        } catch(e) {}
+    // Intercept window.open to route new windows through proxy
+    (function() {
+        var _origOpen = window.open;
+        window.open = function(url, target, features) {
+            if (typeof url === 'string' && url.indexOf('://') !== -1 && url.indexOf(window.location.host) === -1) {
+                url = window.location.origin + '/' + url;
+            }
+            return _origOpen.call(this, url, target, features);
+        };
     })();
+
+    // Intercept anchor clicks for new-page navigation through proxy
+    document.addEventListener('click', function(e) {
+        var a = e.target.closest ? e.target.closest('a') : null;
+        if (!a) return;
+        var href = a.getAttribute('href');
+        if (!href) return;
+        if (href.indexOf('://') !== -1 && href.indexOf(window.location.host) === -1) {
+            e.preventDefault();
+            var proxyUrl = window.location.origin + '/' + href;
+            if (a.target === '_blank') {
+                window.open(proxyUrl, '_blank');
+            } else {
+                window.location.href = proxyUrl;
+            }
+        }
+    }, true);
     try {
         var extractRealHost = function(h) {
             if (!h) return '';
@@ -1941,12 +1896,13 @@ int main() {
             
             const originalOrigin = protocol + "://" + originalHost;
             // Spoof window.location.hostname/host/origin in HTML inline scripts
-            html = html.replace(/window\.location\.hostname/g, "('" + originalHost + "')");
-            html = html.replace(/location\.hostname/g, "('" + originalHost + "')");
-            html = html.replace(/window\.location\.host/g, "('" + originalHost + "')");
-            html = html.replace(/location\.host/g, "('" + originalHost + "')");
-            html = html.replace(/window\.location\.origin/g, "('" + originalOrigin + "')");
-            html = html.replace(/location\.origin/g, "('" + originalOrigin + "')");
+            // IMPORTANT: Replace longer names first; use \b to avoid corrupting .href, .hash, etc.
+            html = html.replace(/window\.location\.hostname\b/g, "('" + originalHost + "')");
+            html = html.replace(/location\.hostname\b/g, "('" + originalHost + "')");
+            html = html.replace(/window\.location\.origin\b/g, "('" + originalOrigin + "')");
+            html = html.replace(/location\.origin\b/g, "('" + originalOrigin + "')");
+            html = html.replace(/window\.location\.host\b(?!name)/g, "('" + originalHost + "')");
+            html = html.replace(/location\.host\b(?!name)/g, "('" + originalHost + "')");
             
             return res.status(response.status).send(html);
         }
@@ -1956,12 +1912,12 @@ int main() {
         if (contentType && (contentType.includes("javascript") || contentType.includes("application/js") || contentType.includes("application/javascript"))) {
             let jsContent = await response.text();
             const originalOrigin = protocol + "://" + originalHost;
-            jsContent = jsContent.replace(/window\.location\.hostname/g, "('" + originalHost + "')");
-            jsContent = jsContent.replace(/location\.hostname/g, "('" + originalHost + "')");
-            jsContent = jsContent.replace(/window\.location\.host/g, "('" + originalHost + "')");
-            jsContent = jsContent.replace(/location\.host/g, "('" + originalHost + "')");
-            jsContent = jsContent.replace(/window\.location\.origin/g, "('" + originalOrigin + "')");
-            jsContent = jsContent.replace(/location\.origin/g, "('" + originalOrigin + "')");
+            jsContent = jsContent.replace(/window\.location\.hostname\b/g, "('" + originalHost + "')");
+            jsContent = jsContent.replace(/location\.hostname\b/g, "('" + originalHost + "')");
+            jsContent = jsContent.replace(/window\.location\.origin\b/g, "('" + originalOrigin + "')");
+            jsContent = jsContent.replace(/location\.origin\b/g, "('" + originalOrigin + "')");
+            jsContent = jsContent.replace(/window\.location\.host\b(?!name)/g, "('" + originalHost + "')");
+            jsContent = jsContent.replace(/location\.host\b(?!name)/g, "('" + originalHost + "')");
             res.setHeader("Content-Type", contentType);
             return res.send(jsContent);
         }
