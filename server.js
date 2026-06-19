@@ -1289,15 +1289,14 @@ app.all('*', async (req, res) => {
             if (wifiLogs.length > 50) wifiLogs.pop();
         }
 
-        // 1. MOCK TESTPAD SECURITY VALIDATION
-        if (fullUrl.searchParams.get("json") === "1" || (req.headers.accept && req.headers.accept.includes("application/json"))) {
-            res.setHeader("Content-Type", "application/json");
-            res.setHeader("Access-Control-Allow-Origin", "*");
-            return res.status(200).send(JSON.stringify({ quiz: true, id: "proxy-test", name: "Mock Test", status: "active", duration: 3600 }));
-        }
+        // 1. MOCK EXAM WITH FULL BLUE TEAM SECURITY
+        if (req.path === "/test/mock123" || req.path === "/test/ghost-solver") {
+            if (fullUrl.searchParams.get("json") === "1" || (req.headers.accept && req.headers.accept.includes("application/json"))) {
+                res.setHeader("Content-Type", "application/json");
+                res.setHeader("Access-Control-Allow-Origin", "*");
+                return res.status(200).send(JSON.stringify({ quiz: true, id: "proxy-test", name: "Mock Test", status: "active", duration: 3600 }));
+            }
 
-        // 1.5. MOCK EXAM WITH FULL BLUE TEAM SECURITY
-        if ((req.path === "/test/mock123" || req.path === "/test/ghost-solver") && !fullUrl.searchParams.has("json")) {
             // Simulated Testpad IP Whitelist (College Lab IP)
             const REQUIRED_IP = process.env.WHITELIST_IP || "115.242.155.86";
             
