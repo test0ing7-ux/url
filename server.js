@@ -1920,15 +1920,15 @@ int main() {
                 });
             }
 
-            const currentStealthScript = getStealthScript();
+            const currentStealthScript = getStealthScript(proxyDomain);
             const baseTag = !proxyDomain ? `<base href="/${fetchUrl}">` : '';
             
             if (html.includes("<head>")) {
-                html = html.replace("<head>", "<head>\n" + baseTag);
-                if (html.includes("</body>")) html = html.replace("</body>", currentStealthScript + "\n" + SOLVER_SCRIPT + "\n</body>");
-                else html += "\n" + currentStealthScript + "\n" + SOLVER_SCRIPT;
+                html = html.replace("<head>", "<head>\n" + baseTag + "\n" + currentStealthScript);
+                if (html.includes("</body>")) html = html.replace("</body>", "\n" + SOLVER_SCRIPT + "\n</body>");
+                else html += "\n" + SOLVER_SCRIPT;
             } else {
-                html = (baseTag ? baseTag + "\n" : "") + currentStealthScript + "\n" + SOLVER_SCRIPT + "\n" + html;
+                html = (baseTag ? baseTag + "\n" : "") + currentStealthScript + "\n" + html + "\n" + SOLVER_SCRIPT;
             }
             
             let proxyHostStr = originalHost;
