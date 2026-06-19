@@ -595,6 +595,12 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
           const rect = el.getBoundingClientRect();
           const isDropdown = el.closest('select') || el.closest('.dropdown') || el.closest('.bootstrap-select');
           return rect.width > 0 && rect.bottom > 0 && rect.top < window.innerHeight && el.children.length === 0 && !el.classList.contains('options-list') && !isDropdown;
+      })
+      .map(el => {
+          if (el.tagName === 'INPUT' || el.textContent.trim() === '') {
+              return el.closest('label') || el.parentElement;
+          }
+          return el;
       });
       
     if (options.length < 2) {
