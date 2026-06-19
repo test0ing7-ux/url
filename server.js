@@ -562,11 +562,39 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
   }
 
   function getQuestionType() {
-    // 1. Check for VISIBLE MCQs first (Viewport only)
-    let options = Array.from(document.querySelectorAll('.choice, .option-text, [class*="option"], [class*="choice"], [class*="answer"]'))
+    // 1. Resilient multi-selector written/code input detection (Viewport only)
+    const editorSelectors = [
+      'textarea:not([class*="hidden"]):not([style*="display: none"])',
+      '[contenteditable="true"]',
+      '.ace_text-input',
+      '.monaco-editor textarea',
+      '.CodeMirror textarea',
+      '.cm-content',
+      '[class*="editor"] textarea',
+      '[class*="code"] textarea',
+      'input[type="text"]:not([readonly]):not([type="hidden"])'
+    ];
+    let codeTarget = null;
+    for (const sel of editorSelectors) {
+      const els = Array.from(document.querySelectorAll(sel))
+        .filter(el => {
+            const rect = el.getBoundingClientRect();
+            // Ensure the code box is actually visible and takes up space
+            return rect.width > 10 && rect.height > 10 && rect.bottom > 0 && rect.top < window.innerHeight;
+        });
+      if (els.length > 0) {
+        codeTarget = els[0];
+        break;
+      }
+    }
+
+    // 2. Check for VISIBLE MCQs first (Viewport only)
+    // Avoid matching language dropdown options by explicitly rejecting 'filter-option' or 'dropdown' classes
+    let options = Array.from(document.querySelectorAll('.choice, .option-text, [class*="option"]:not([class*="filter-option"]), [class*="choice"], [class*="answer"]:not([class*="dropdown"])'))
       .filter(el => {
           const rect = el.getBoundingClientRect();
-          return rect.width > 0 && rect.bottom > 0 && rect.top < window.innerHeight && el.children.length === 0 && !el.classList.contains('options-list');
+          const isDropdown = el.closest('select') || el.closest('.dropdown') || el.closest('.bootstrap-select');
+          return rect.width > 0 && rect.bottom > 0 && rect.top < window.innerHeight && el.children.length === 0 && !el.classList.contains('options-list') && !isDropdown;
       });
       
     if (options.length < 2) {
@@ -580,28 +608,9 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
       }
     }
     
+    // If we clearly see a code editor, prioritize that over weak MCQ guesses
+    if (codeTarget) return { type: 'written', target: codeTarget };
     if (options.length >= 2) return { type: "mcq", options: options };
-
-    // 2. Resilient multi-selector written/code input detection (Viewport only)
-    const editorSelectors = [
-      'textarea',
-      '[contenteditable="true"]',
-      '.ace_text-input',
-      '.monaco-editor textarea',
-      '.CodeMirror textarea',
-      '.cm-content',
-      '[class*="editor"] textarea',
-      '[class*="code"] textarea',
-      'input[type="text"]:not([readonly]):not([type="hidden"])'
-    ];
-    for (const sel of editorSelectors) {
-      const els = Array.from(document.querySelectorAll(sel))
-        .filter(el => {
-            const rect = el.getBoundingClientRect();
-            return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
-        });
-      if (els.length > 0) return { type: 'written', target: els[0] };
-    }
 
     return { type: 'written', target: null };
   }
