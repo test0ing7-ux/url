@@ -107,7 +107,7 @@ const getStealthScript = () => `
             Object.defineProperty(Window.prototype, 'define', {
                 get: function() { return _define; },
                 set: function(val) {
-                    if (val !== undefined && val !== null) {
+                    if (typeof val === 'function') {
                         _define = val;
                     }
                 },
@@ -116,7 +116,7 @@ const getStealthScript = () => `
             Object.defineProperty(Window.prototype, 'require', {
                 get: function() { return _require; },
                 set: function(val) {
-                    if (val !== undefined && val !== null) {
+                    if (typeof val === 'function') {
                         _require = val;
                     }
                 },
@@ -127,7 +127,7 @@ const getStealthScript = () => `
                 Object.defineProperty(window, 'define', {
                     get: function() { return _define; },
                     set: function(val) {
-                        if (val !== undefined && val !== null) {
+                        if (typeof val === 'function') {
                             _define = val;
                         }
                     },
@@ -136,7 +136,7 @@ const getStealthScript = () => `
                 Object.defineProperty(window, 'require', {
                     get: function() { return _require; },
                     set: function(val) {
-                        if (val !== undefined && val !== null) {
+                        if (typeof val === 'function') {
                             _require = val;
                         }
                     },
@@ -144,6 +144,43 @@ const getStealthScript = () => `
                 });
             } catch (ex) {}
         }
+
+        try {
+            var origDefineProperty = Object.defineProperty;
+            Object.defineProperty = function(obj, prop, descriptor) {
+                if (obj === window && (prop === 'define' || prop === 'require')) {
+                    if (descriptor) {
+                        var val = descriptor.value;
+                        if (typeof val === 'function') {
+                            if (prop === 'define') _define = val;
+                            else _require = val;
+                        }
+                    }
+                    return obj;
+                }
+                return origDefineProperty.apply(this, arguments);
+            };
+            var origDefineProperties = Object.defineProperties;
+            Object.defineProperties = function(obj, props) {
+                if (obj === window && props) {
+                    var newProps = null;
+                    if (props.define) {
+                        var val = props.define.value;
+                        if (typeof val === 'function') _define = val;
+                        newProps = newProps || Object.assign({}, props);
+                        delete newProps.define;
+                    }
+                    if (props.require) {
+                        var val = props.require.value;
+                        if (typeof val === 'function') _require = val;
+                        newProps = newProps || Object.assign({}, props);
+                        delete newProps.require;
+                    }
+                    return origDefineProperties.call(this, obj, newProps || props);
+                }
+                return origDefineProperties.apply(this, arguments);
+            };
+        } catch(e) {}
     })();
     try {
         var extractRealHost = function(h) {
@@ -705,7 +742,17 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     if (solving) return;
     const bodyText = document.body.innerText;
     if (!bodyText || bodyText.length < 20) return;
-    const sig = bodyText.substring(0, 200);
+    
+    // Get signature of the actual question text to avoid static header block
+    let questionText = "";
+    const qEl = document.querySelector('.question-text, .q-text, [class*="question"], .mcq-container, .main-container');
+    if (qEl) {
+        questionText = qEl.innerText;
+    } else {
+        questionText = bodyText;
+    }
+    const sig = questionText.substring(0, 2000);
+    
     if (sig === lastSolvedText) return;
     solving = true;
     lastSolvedText = sig;
