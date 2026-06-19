@@ -1805,7 +1805,11 @@ int main() {
             } else if (req.headers.host) {
                 proxyHostStr = req.headers.host;
             }
-            if (proxyHostStr && proxyHostStr !== originalHost) {
+            
+            const reqContentType = (req.headers['content-type'] || '').toLowerCase();
+            const isTextBody = reqContentType.includes('json') || reqContentType.includes('urlencoded') || reqContentType.includes('text');
+
+            if (isTextBody && proxyHostStr && proxyHostStr !== originalHost) {
                 let bodyStr = req.body.toString('utf8');
                 if (bodyStr.includes(proxyHostStr)) {
                     bodyStr = bodyStr.split(proxyHostStr).join(originalHost);
@@ -1841,12 +1845,19 @@ int main() {
                 } catch(e) {}
                 res.setHeader('Location', location);
             } else if (key.toLowerCase() === 'set-cookie') {
-                // Strip domain, secure, samesite to ensure cookies always work through proxy
-                const cleanCookie = (c) => c
-                    .replace(/;\s*domain=[^;]*/gi, '')
-                    .replace(/;\s*secure/gi, '')
-                    .replace(/;\s*samesite=[^;]*/gi, '')
-                    .replace(/;\s*path=[^;]*/gi, '; path=/');
+                // Force cookies to be accessible across all proxy subdomains (fixing cross-subdomain logins)
+                const cleanCookie = (c) => {
+                    let newCookie = c
+                        .replace(/;\s*domain=[^;]*/gi, '')
+                        .replace(/;\s*secure/gi, '')
+                        .replace(/;\s*samesite=[^;]*/gi, '')
+                        .replace(/;\s*path=[^;]*/gi, '');
+                    newCookie += '; Path=/';
+                    if (proxyDomain) {
+                        newCookie += '; Domain=' + proxyDomain + '; Secure; SameSite=None';
+                    }
+                    return newCookie;
+                };
                 if (response.headers.getSetCookie) {
                     const cookies = response.headers.getSetCookie();
                     res.setHeader('Set-Cookie', cookies.map(cleanCookie));
