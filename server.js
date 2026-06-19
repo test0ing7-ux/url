@@ -1793,38 +1793,59 @@ int main() {
             headers: proxyHeaders,
             redirect: "manual"
         };
+        const reqContentType = (req.headers['content-type'] || '').toLowerCase();
+        const isTextBody = reqContentType.includes('json') || reqContentType.includes('urlencoded') || reqContentType.includes('text');
 
-        if (req.method !== 'GET' && req.method !== 'HEAD' && Buffer.isBuffer(req.body) && req.body.length > 0) {
-            // Reverse hostname replacement in POST body so target server sees its own domain
-            let proxyHostStr = null;
-            if (proxyDomain) {
-                try {
-                    const proxyUrlObj = new URL(getTargetProxyUrl("https://" + originalHost, proxyDomain));
-                    proxyHostStr = proxyUrlObj.hostname;
-                } catch(e) {}
-            } else if (req.headers.host) {
-                proxyHostStr = req.headers.host;
-            }
-            
-            const reqContentType = (req.headers['content-type'] || '').toLowerCase();
-            const isTextBody = reqContentType.includes('json') || reqContentType.includes('urlencoded') || reqContentType.includes('text');
+        if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
+            let bodyBuffer = null;
 
-            if (isTextBody && proxyHostStr && proxyHostStr !== originalHost) {
-                let bodyStr = req.body.toString('utf8');
-                if (bodyStr.includes(proxyHostStr)) {
-                    bodyStr = bodyStr.split(proxyHostStr).join(originalHost);
-                    fetchOptions.body = Buffer.from(bodyStr, 'utf8');
-                } else {
-                    fetchOptions.body = req.body;
+            // Handle Vercel's automatic body parsing (req.body is object/string)
+            if (!Buffer.isBuffer(req.body)) {
+                if (typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+                    if (reqContentType.includes('json')) {
+                        bodyBuffer = Buffer.from(JSON.stringify(req.body), 'utf8');
+                    } else if (reqContentType.includes('urlencoded')) {
+                        bodyBuffer = Buffer.from(new URLSearchParams(req.body).toString(), 'utf8');
+                    } else {
+                        bodyBuffer = Buffer.from(req.body.toString(), 'utf8');
+                    }
+                } else if (typeof req.body === 'string') {
+                    bodyBuffer = Buffer.from(req.body, 'utf8');
                 }
-            } else {
-                fetchOptions.body = req.body;
+            } else if (req.body.length > 0) {
+                bodyBuffer = req.body;
+            }
+
+            if (bodyBuffer) {
+                let proxyHostStr = null;
+                if (proxyDomain) {
+                    try {
+                        const proxyUrlObj = new URL(getTargetProxyUrl("https://" + originalHost, proxyDomain));
+                        proxyHostStr = proxyUrlObj.hostname;
+                    } catch(e) {}
+                } else if (req.headers.host) {
+                    proxyHostStr = req.headers.host;
+                }
+
+                if (isTextBody && proxyHostStr && proxyHostStr !== originalHost) {
+                    let bodyStr = bodyBuffer.toString('utf8');
+                    if (bodyStr.includes(proxyHostStr)) {
+                        bodyStr = bodyStr.split(proxyHostStr).join(originalHost);
+                        fetchOptions.body = Buffer.from(bodyStr, 'utf8');
+                    } else {
+                        fetchOptions.body = bodyBuffer;
+                    }
+                } else {
+                    fetchOptions.body = bodyBuffer;
+                }
+            }
             }
             if (req.method === 'POST') {
                 console.log(`[POST DEBUG] URL: ${fetchUrl}`);
-                console.log(`[POST DEBUG] Body: ${fetchOptions.body.toString('utf8').substring(0, 500)}`);
+                try {
+                    console.log(`[POST DEBUG] Body: ${fetchOptions.body ? fetchOptions.body.toString('utf8').substring(0, 500) : 'none'}`);
+                } catch(e) {}
             }
-        }
 
         const response = await fetch(fetchUrl, fetchOptions);
         
