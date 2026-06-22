@@ -2256,12 +2256,18 @@ int main() {
                                 ['content-type', isHtml ? 'text/html; charset=utf-8' : 'application/octet-stream']
                             ]),
                             text: async () => curlText,
-                            arrayBuffer: async () => curlResult.buffer,
+                            arrayBuffer: async () => Buffer.from(curlText, 'utf8'),
                             _isCurlResponse: true
                         };
                         // Make headers iterable like a real response
-                        response.headers.get = (k) => response.headers.get(k) || response.headers.get(k.toLowerCase()) || '';
+                        response.headers.get = (k) => response.headers.get(k) || '';
                         response.headers.entries = () => response.headers.entries();
+                    } else {
+                        // curl also got blocked — return the CF challenge page directly
+                        console.log('[CF BYPASS] curl also blocked by Cloudflare');
+                        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+                        res.setHeader('Access-Control-Allow-Origin', '*');
+                        return res.status(403).send(peekBody);
                     }
                 } catch(curlErr) {
                     console.log('[CF BYPASS] curl failed:', curlErr.message);
