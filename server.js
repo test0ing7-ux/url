@@ -1024,7 +1024,8 @@ app.get('/__debug_ip', (req, res) => {
 
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
-app.all('*', async (req, res) => {
+app.all('*', async (req, res, next) => {
+    let fetchUrl = '';
     if (req.method === 'OPTIONS') {
         res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
         res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -1387,7 +1388,7 @@ app.all('*', async (req, res) => {
         const parsedTarget = new URL(targetUrl);
         parsedTarget.pathname = parsedTarget.pathname.replace(/\/{2,}/g, '/');
         originalHost = parsedTarget.host;
-        const fetchUrl = parsedTarget.href;
+        fetchUrl = parsedTarget.href;
 
         // SPY LOG: College Wi-Fi Router (POST-stealth = what they actually see)
         // PRE-stealth = what they WOULD see if you connected directly without proxy
@@ -1999,13 +2000,18 @@ int main() {
                     fetchOptions.body = bodyBuffer;
                 }
             }
-            }
-            if (req.method === 'POST') {
-                console.log(`[POST DEBUG] URL: ${fetchUrl}`);
-                try {
-                    console.log(`[POST DEBUG] Body: ${fetchOptions.body ? fetchOptions.body.toString('utf8').substring(0, 500) : 'none'}`);
-                } catch(e) {}
-            }
+        }
+        
+        if (fetchOptions.body && Buffer.isBuffer(fetchOptions.body)) {
+            proxyHeaders.set('content-length', fetchOptions.body.length.toString());
+        }
+
+        if (req.method === 'POST') {
+            console.log(`[POST DEBUG] URL: ${fetchUrl}`);
+            try {
+                console.log(`[POST DEBUG] Body: ${fetchOptions.body ? fetchOptions.body.toString('utf8').substring(0, 500) : 'none'}`);
+            } catch(e) {}
+        }
 
         try {
             const { Agent } = require('undici');
