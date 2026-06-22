@@ -23,6 +23,10 @@ function extractDomains(host) {
                 const parts = subdomain.split('--');
                 const processedParts = parts.map(part => part.replace(/-/g, '.'));
                 const originalHost = processedParts.join('-');
+                // Validate: reject garbage hostnames (all dots/dashes, no real segments)
+                if (!originalHost || /^[.\-]+$/.test(originalHost) || !originalHost.match(/[a-zA-Z0-9]/)) {
+                    return { originalHost: host, proxyDomain: "" };
+                }
                 return {
                     originalHost: originalHost,
                     proxyDomain: proxySuffix
@@ -68,7 +72,16 @@ const BYPASS_DOMAINS = [
     'analytics.google.com','www.googletagmanager.com','appleid.apple.com','github.com',
     'facebook.com','fbcdn.net','clarity.ms','hotjar.com','cloudflareinsights.com',
     'stripe.com','razorpay.com','paypal.com','paytm.com','mathjax.org','jsdelivr.net',
-    'math.geeksforgeeks.org'
+    'math.geeksforgeeks.org',
+    // Additional CDN/analytics domains to prevent 502 errors
+    'www.google-analytics.com','ssl.google-analytics.com','google-analytics.com',
+    'stats.g.doubleclick.net','www.googleadservices.com','pagead2.googlesyndication.com',
+    'connect.facebook.net','staticxx.facebook.com','graph.facebook.com',
+    'use.typekit.net','p.typekit.net','kit.fontawesome.com',
+    'polyfill.io','cdn.polyfill.io','newrelic.com','nr-data.net',
+    'datadoghq.com','bugsnag.com','rollbar.com','logrocket.com','fullstory.com',
+    'segment.io','segment.com','cdn.segment.com','mixpanel.com','amplitude.com',
+    'intercom.io','crisp.chat','tawk.to','zendesk.com','freshdesk.com'
 ];
 
 function shouldBypass(url) {
@@ -201,7 +214,12 @@ const getStealthScript = () => `
             'datadoghq.com','dd-trace','bugsnag.com','rollbar.com','logrocket.com','fullstory.com',
             'segment.io','segment.com','mixpanel.com','amplitude.com','intercom.io','crisp.chat',
             'tawk.to','zendesk.com','freshdesk.com','stripe.com','js.stripe.com','razorpay.com',
-            'checkout.razorpay.com','paypal.com','paytm.com'];
+            'checkout.razorpay.com','paypal.com','paytm.com',
+            'www.google-analytics.com','ssl.google-analytics.com','google-analytics.com',
+            'stats.g.doubleclick.net','www.googleadservices.com','pagead2.googlesyndication.com',
+            'connect.facebook.net','staticxx.facebook.com','graph.facebook.com',
+            'use.typekit.net','p.typekit.net','kit.fontawesome.com','polyfill.io',
+            'cdn.segment.com','mathjax.org','jsdelivr.net','math.geeksforgeeks.org'];
 
         var _isBypassed = function(u) {
             if (!u || typeof u !== 'string') return true;
@@ -1877,13 +1895,11 @@ int main() {
         }
         proxyHeaders.set("Host", originalHost);
         
-        // SPOOFING: Inject the college IP into all common "Real IP" headers
-        if (clientIp) {
-            // We can't safely spoof CF-Connecting-IP or X-Forwarded-For to a Cloudflare protected site
-            // as Cloudflare will throw Error 1000 (DNS points to prohibited IP). 
-            // We only spoof the application-level headers that the backend app might read.
-            proxyHeaders.set("X-Real-IP", clientIp);
-            proxyHeaders.set("True-Client-IP", clientIp);
+        // SPOOFING: Only inject IP headers when SPOOF_IP is explicitly configured
+        // Avoids Cloudflare Error 1000 and header mismatches with CDN-protected sites
+        if (HARDCODED_SPOOF_IP) {
+            proxyHeaders.set("X-Real-IP", HARDCODED_SPOOF_IP);
+            proxyHeaders.set("True-Client-IP", HARDCODED_SPOOF_IP);
         }
 
         // SPY LOG: Testpad Backend (both pre and post stealth)
@@ -1955,12 +1971,22 @@ int main() {
 
                 if (isTextBody && proxyHostStr && proxyHostStr !== originalHost) {
                     let bodyStr = bodyBuffer.toString('utf8');
+                    // Replace proxy hostname with original hostname
                     if (bodyStr.includes(proxyHostStr)) {
                         bodyStr = bodyStr.split(proxyHostStr).join(originalHost);
-                        fetchOptions.body = Buffer.from(bodyStr, 'utf8');
-                    } else {
-                        fetchOptions.body = bodyBuffer;
                     }
+                    // Also handle URL-encoded proxy hostname (for form submissions)
+                    const encodedProxyHost = encodeURIComponent(proxyHostStr);
+                    if (bodyStr.includes(encodedProxyHost)) {
+                        bodyStr = bodyStr.split(encodedProxyHost).join(encodeURIComponent(originalHost));
+                    }
+                    // Handle full proxy origin URLs in body (for redirects, callbacks)
+                    const proxyOriginHttp = 'https://' + proxyHostStr;
+                    const originalOriginHttp = 'https://' + originalHost;
+                    if (bodyStr.includes(proxyOriginHttp)) {
+                        bodyStr = bodyStr.split(proxyOriginHttp).join(originalOriginHttp);
+                    }
+                    fetchOptions.body = Buffer.from(bodyStr, 'utf8');
                 } else {
                     fetchOptions.body = bodyBuffer;
                 }
@@ -2003,16 +2029,20 @@ int main() {
                 res.setHeader('Location', location);
             } else if (key.toLowerCase() === 'set-cookie') {
                 // Force cookies to be accessible across all proxy subdomains (fixing cross-subdomain logins)
-                const cleanCookie = (c) => {
-                    let newCookie = c
+                const cleanCookie = (cookie) => {
+                    // Preserve HttpOnly flag for security
+                    const hasHttpOnly = /;\s*httponly/i.test(cookie);
+                    let newCookie = cookie
                         .replace(/;\s*domain=[^;]*/gi, '')
                         .replace(/;\s*secure/gi, '')
                         .replace(/;\s*samesite=[^;]*/gi, '')
+                        .replace(/;\s*httponly/gi, '')
                         .replace(/;\s*path=[^;]*/gi, '');
                     newCookie += '; Path=/';
                     if (proxyDomain) {
                         newCookie += '; Domain=' + proxyDomain + '; Secure; SameSite=None';
                     }
+                    if (hasHttpOnly) newCookie += '; HttpOnly';
                     return newCookie;
                 };
                 if (response.headers.getSetCookie) {
@@ -2098,24 +2128,8 @@ int main() {
         if (contentType && (contentType.includes("javascript") || contentType.includes("application/js") || contentType.includes("application/javascript"))) {
             let jsContent = await response.text();
             
-            if (proxyDomain && originalHost) {
-                const rootDomain = originalHost.split('.').slice(-2).join('.');
-                const escapedHost = rootDomain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                
-                // Dynamically rewrite absolute URLs targeting the origin's root domain
-                const urlRegex = new RegExp(`https?:\\/\\/([a-zA-Z0-9.-]*${escapedHost})`, 'g');
-                jsContent = jsContent.replace(urlRegex, (match, domain) => {
-                    return getTargetProxyUrl("https://" + domain, proxyDomain);
-                });
-                
-                // Catch naked domain strings in the JS configuration object keys
-                const strRegex = new RegExp(`(["'])([a-zA-Z0-9.-]*${escapedHost})\\1`, 'g');
-                jsContent = jsContent.replace(strRegex, (match, quote, domain) => {
-                    const proxyUrl = new URL(getTargetProxyUrl("https://" + domain, proxyDomain));
-                    return quote + proxyUrl.hostname + quote;
-                });
-            }
-            
+            // JS rewriting removed — client-side network hooks (fetch/XHR/WebSocket interception
+            // in stealth script) handle all runtime URL routing safely without risking syntax corruption
             res.setHeader("Content-Type", contentType);
             return res.send(jsContent);
         }
