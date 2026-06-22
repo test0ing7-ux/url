@@ -2010,13 +2010,14 @@ int main() {
                         if (proxyDomain) {
                             location = getTargetProxyUrl(absLocation, proxyDomain);
                         } else {
-                            location = '/fetch/' + absLocation;
+                            location = '/' + absLocation;
                         }
-                    } else {
-                        location = absLocation;
                     }
+                    // Always force HTTPS on Location headers for Vercel proxy
+                    location = location.replace(/^http:/i, 'https:');
                 } catch(e) {}
                 res.setHeader('Location', location);
+                continue;
             } else if (key.toLowerCase() === 'set-cookie') {
                 // Force cookies to be accessible across all proxy subdomains (fixing cross-subdomain logins)
                 const cleanCookie = (cookie) => {
@@ -2132,7 +2133,8 @@ int main() {
         }
 
     } catch (err) {
-        res.status(502).send("Proxy error: " + err.message);
+        console.error("PROXY FETCH EXCEPTION:", err);
+        res.status(503).send("Proxy error: " + err.message + "\n" + err.stack);
     }
 });
 if (process.env.VERCEL) {
