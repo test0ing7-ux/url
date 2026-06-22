@@ -181,7 +181,7 @@ const getStealthScript = () => `
 
         var REAL_ORIGIN = '';
         var REAL_HOST = '';
-        var match = window.location['href'].match(/\\/(?:fetch\\/)?(https?:\\/+(?:[^\\/]+))/);
+        var match = window.location['href'].match(/\/(?:fetch\/)?(https?:\/+(?:[^\/]+))/);
         if (match) { 
             let targetOrigin = match[1];
             if (targetOrigin.startsWith('https:/') && !targetOrigin.startsWith('https://')) {
@@ -361,21 +361,6 @@ const getStealthScript = () => `
         window.webkitRTCPeerConnection = undefined;
         window.mozRTCPeerConnection = undefined;
 
-        // ====== LAYER 1.6: STORAGE CRASH HARDENER ======
-        try {
-            var origParse = JSON.parse;
-            JSON.parse = function(text, reviver) {
-                if (text === null || text === undefined || text === 'null' || text === '') {
-                    return {};
-                }
-                try {
-                    return origParse(text, reviver);
-                } catch(e) {
-                    return {};
-                }
-            };
-        } catch(e) {}
-
         // ====== LAYER 2: UNIVERSAL NETWORK INTERCEPTION ======
 
         var origFetch = window.fetch;
@@ -409,6 +394,7 @@ const getStealthScript = () => `
         };
         var origSend = XMLHttpRequest.prototype.send;
         XMLHttpRequest.prototype.send = function(body) {
+            if (arguments.length === 0) return origSend.call(this);
             if (typeof body === 'string') body = scrub(body);
             return origSend.call(this, body);
         };
