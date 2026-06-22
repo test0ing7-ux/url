@@ -129,7 +129,15 @@ const getStealthScript = () => `
         var _origOpen = window.open;
         window.open = function(url, target, features) {
             if (typeof url === 'string' && url.indexOf('://') !== -1 && url.indexOf(window.location.host) === -1) {
-                url = window.location.origin + '/' + url;
+                // Do not proxy OAuth / third-party identity providers
+                var bypass = ['accounts.google.com', 'login.microsoftonline.com', 'auth0.com', 'okta.com', 'appleid.apple.com'];
+                var shouldBypass = false;
+                for (var i = 0; i < bypass.length; i++) {
+                    if (url.indexOf(bypass[i]) !== -1) { shouldBypass = true; break; }
+                }
+                if (!shouldBypass) {
+                    url = window.location.origin + '/' + url;
+                }
             }
             return _origOpen.call(this, url, target, features);
         };
@@ -370,6 +378,10 @@ const getStealthScript = () => `
         var origFetch = window.fetch;
         window.fetch = async function(...args) {
             var url = typeof args[0] === 'string' ? args[0] : (args[0] instanceof Request ? args[0].url : '');
+            if (url.indexOf('http://') === 0 && url.indexOf(window.location.hostname) !== -1 && window.location.protocol === 'https:') {
+                url = url.replace('http://', 'https://');
+                if (typeof args[0] === 'string') args[0] = url;
+            }
             if (url.indexOf('/__') === -1) {
                 if (typeof args[0] === 'string') {
                     args[0] = _tunnelUrl(args[0]);
@@ -391,8 +403,13 @@ const getStealthScript = () => `
 
         var origOpen = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-            if (typeof url === 'string' && url.indexOf('/__') === -1) {
-                url = _tunnelUrl(url);
+            if (typeof url === 'string') {
+                if (url.indexOf('http://') === 0 && url.indexOf(window.location.hostname) !== -1 && window.location.protocol === 'https:') {
+                    url = url.replace('http://', 'https://');
+                }
+                if (url.indexOf('/__') === -1) {
+                    url = _tunnelUrl(url);
+                }
             }
             return origOpen.call(this, method, url, ...rest);
         };
@@ -1858,6 +1875,7 @@ int main() {
         
         for (const [key, value] of Object.entries(req.headers)) {
             if (['host', 'connection', 'accept-encoding', 'content-length', 'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port', 'x-real-ip', 'cf-connecting-ip'].includes(key.toLowerCase())) continue;
+            if (key.toLowerCase().startsWith('sec-fetch-')) continue;
             
             if (key.toLowerCase() === 'origin' || key.toLowerCase() === 'referer') {
                 let rewrittenValue = value;
@@ -1988,6 +2006,13 @@ int main() {
                     console.log(`[POST DEBUG] Body: ${fetchOptions.body ? fetchOptions.body.toString('utf8').substring(0, 500) : 'none'}`);
                 } catch(e) {}
             }
+
+        try {
+            const { Agent } = require('undici');
+            if (!fetchOptions.dispatcher) {
+                fetchOptions.dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+            }
+        } catch(e) {}
 
         const response = await fetch(fetchUrl, fetchOptions);
         
@@ -2133,8 +2158,8 @@ int main() {
         }
 
     } catch (err) {
-        console.error("PROXY FETCH EXCEPTION:", err);
-        res.status(503).send("Proxy error: " + err.message + "\n" + err.stack);
+        console.error("PROXY FETCH EXCEPTION for URL:", fetchUrl, err);
+        res.status(503).send("Proxy error fetching " + fetchUrl + ": " + err.message + "\n" + err.stack);
     }
 });
 if (process.env.VERCEL) {
