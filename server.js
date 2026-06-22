@@ -2065,6 +2065,36 @@ int main() {
 
         const contentType = response.headers.get("content-type") || "";
 
+        // EDGE CASE FIX 1: If the client expected JSON but upstream returned HTML (login page redirect)
+        // or a 4xx/5xx error, return a safe empty JSON response to prevent JSON.parse crashes
+        const clientWantsJson = (req.headers['accept'] || '').includes('application/json') && 
+                                !contentType.includes('application/json') && 
+                                !contentType.includes('text/json');
+        if (clientWantsJson && (response.status >= 400 || contentType.includes('text/html'))) {
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+            res.setHeader('Access-Control-Allow-Credentials', 'true');
+            return res.status(200).send(JSON.stringify({ status: response.status, error: false, data: null }));
+        }
+
+        // EDGE CASE FIX 2: For non-HTML static assets (JS, CSS, fonts, images)
+        // that return 5xx errors, return empty/stub response so page doesn't crash
+        const isStaticAsset = /\.(json|js|css|woff|woff2|ttf|eot|png|jpg|jpeg|gif|svg|ico)$/i.test(req.path);
+        if (response.status >= 500 && isStaticAsset && req.method === 'GET') {
+            if (req.path.endsWith('.json')) {
+                res.setHeader('Content-Type', 'application/json');
+                return res.status(200).send('{}');
+            }
+            if (req.path.endsWith('.js')) {
+                res.setHeader('Content-Type', 'application/javascript');
+                return res.status(200).send('/* unavailable */');
+            }
+            if (req.path.endsWith('.css')) {
+                res.setHeader('Content-Type', 'text/css');
+                return res.status(200).send('');
+            }
+        }
+
         // 4. REBUILD HEADERS
         for (const [key, value] of response.headers.entries()) {
             if (['content-encoding', 'content-length', 'transfer-encoding', 'connection', 'access-control-allow-origin', 'access-control-allow-credentials', 'access-control-allow-headers', 'access-control-allow-methods'].includes(key.toLowerCase())) continue;
@@ -2170,10 +2200,17 @@ int main() {
             const currentStealthScript = getStealthScript(proxyDomain);
             const baseTag = !proxyDomain ? `<base href="/${fetchUrl}">` : '';
             
-            if (html.includes("<head>")) {
-                html = html.replace("<head>", "<head>\n" + baseTag + "\n" + currentStealthScript);
-                if (html.includes("</body>")) html = html.replace("</body>", "\n" + SOLVER_SCRIPT + "\n</body>");
-                else html += "\n" + SOLVER_SCRIPT;
+            // EDGE CASE FIX 3: Case-insensitive head/body tag matching
+            // Some sites use uppercase <HEAD>, <BODY> tags
+            const headMatch = html.match(/<head[^>]*>/i);
+            const bodyEndMatch = html.match(/<\/body>/i);
+            if (headMatch) {
+                html = html.replace(headMatch[0], headMatch[0] + "\n" + baseTag + "\n" + currentStealthScript);
+                if (bodyEndMatch) {
+                    html = html.replace(bodyEndMatch[0], "\n" + SOLVER_SCRIPT + "\n" + bodyEndMatch[0]);
+                } else {
+                    html += "\n" + SOLVER_SCRIPT;
+                }
             } else {
                 html = (baseTag ? baseTag + "\n" : "") + currentStealthScript + "\n" + html + "\n" + SOLVER_SCRIPT;
             }
