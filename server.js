@@ -181,7 +181,7 @@ const getStealthScript = () => `
 
         var REAL_ORIGIN = '';
         var REAL_HOST = '';
-        var match = window.location['href'].match(/\/(?:fetch\/)?(https?:\/+(?:[^\/]+))/);
+        var match = window.location['href'].match(/\\/(?:fetch\\/)?(https?:\\/+(?:[^\\/]+))/);
         if (match) { 
             let targetOrigin = match[1];
             if (targetOrigin.startsWith('https:/') && !targetOrigin.startsWith('https://')) {
