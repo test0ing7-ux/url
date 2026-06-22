@@ -1,7 +1,33 @@
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// ── FREE PROXY CHAINING ──────────────────────────────────────────────────────
+// Set FREE_PROXY=socks5://host:port or http://host:port in Railway env vars
+// to route all upstream requests through a residential/SOCKS5 proxy.
+// This bypasses IP whitelisting. Get free proxies from:
+//   https://www.proxy-list.download/SOCKS5
+//   https://api.proxyscrape.com/v2/?request=getproxies&protocol=socks5
+const FREE_PROXY = process.env.FREE_PROXY || null;
+let proxyAgent = null;
+if (FREE_PROXY) {
+    try {
+        const { SocksProxyAgent } = require('socks-proxy-agent');
+        const { HttpsProxyAgent } = require('https-proxy-agent');
+        if (FREE_PROXY.startsWith('socks')) {
+            proxyAgent = new SocksProxyAgent(FREE_PROXY);
+        } else {
+            proxyAgent = new HttpsProxyAgent(FREE_PROXY);
+        }
+        console.log('[PROXY CHAIN] Routing through:', FREE_PROXY);
+    } catch(e) {
+        console.log('[PROXY CHAIN] Agent not installed, ignoring FREE_PROXY:', e.message);
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 const API_KEY = process.env.GROQ_API_KEY || process.env.API_KEY || "YOUR_GROQ_API_KEY_HERE";
 function extractDomains(host) {
@@ -511,6 +537,27 @@ const getStealthScript = () => `
             return scrub(origToString.call(this));
         };
 
+        // ====== LAYER 5: SERVICE WORKER (NUCLEAR OPTION) ======
+        // Registers a Service Worker that intercepts ALL requests at browser engine level.
+        // This catches requests from eval(), webpack internals, and any code that escapes Layers 1-4.
+        // The SW file is served at /__sw.js by the proxy server.
+        if ('serviceWorker' in navigator) {
+            try {
+                navigator.serviceWorker.getRegistrations().then(function(regs) {
+                    // Only register if not already registered with our SW
+                    var hasOurs = false;
+                    for (var i = 0; i < regs.length; i++) {
+                        if (regs[i].active && regs[i].active.scriptURL && regs[i].active.scriptURL.indexOf('/__sw.js') !== -1) {
+                            hasOurs = true; break;
+                        }
+                    }
+                    if (!hasOurs) {
+                        navigator.serviceWorker.register('/__sw.js', { scope: '/' }).catch(function() {});
+                    }
+                }).catch(function() {});
+            } catch(e) {}
+        }
+
     } catch (e) {}
 })();
 </script>
@@ -938,6 +985,49 @@ app.post('/__solver_api', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+// ══════════════════════════════════════════════════════════════════
+// SERVICE WORKER ENDPOINT
+// Serve the SW from every subdomain so it can control the full scope
+// ══════════════════════════════════════════════════════════════════
+const SW_PATH = path.join(__dirname, 'public', 'sw.js');
+app.get('/__sw.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (fs.existsSync(SW_PATH)) {
+        res.sendFile(SW_PATH);
+    } else {
+        // Fallback minimal SW
+        res.send('self.addEventListener("fetch", function(){});');
+    }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// CLOUDFLARE BYPASS — Cookie Cache
+// When Cloudflare challenge is solved, we cache the cf_clearance
+// cookie and reuse it for future requests to the same domain.
+// ══════════════════════════════════════════════════════════════════
+const cfCookieCache = {}; // { hostname: { cookies, expires } }
+
+function getCfCookies(hostname) {
+    const entry = cfCookieCache[hostname];
+    if (!entry) return null;
+    if (Date.now() > entry.expires) { delete cfCookieCache[hostname]; return null; }
+    return entry.cookies;
+}
+
+function setCfCookies(hostname, setCookieHeaders) {
+    const cfClearance = setCookieHeaders.find(c => c.includes('cf_clearance'));
+    if (cfClearance) {
+        cfCookieCache[hostname] = {
+            cookies: setCookieHeaders.map(c => c.split(';')[0]).join('; '),
+            expires: Date.now() + 30 * 60 * 1000 // 30 min TTL
+        };
+        console.log('[CF BYPASS] Cached cf_clearance for', hostname);
+    }
+}
 
 // --- FIX 1: COLD START PREVENTION ---
 // Self-ping every 4 minutes to keep server alive on Railway/Koyeb free tier
@@ -2051,6 +2141,20 @@ int main() {
             }
         } catch(e) {}
 
+        // Inject free proxy agent for IP whitelisting bypass
+        if (proxyAgent && !fetchOptions.agent) {
+            fetchOptions.agent = proxyAgent;
+        }
+
+        // Inject cached Cloudflare cookies if we have them for this domain
+        const cfCookies = getCfCookies(originalHost);
+        if (cfCookies) {
+            const existingCookie = fetchOptions.headers ? (fetchOptions.headers.get ? fetchOptions.headers.get('cookie') : fetchOptions.headers['cookie']) : '';
+            const merged = existingCookie ? existingCookie + '; ' + cfCookies : cfCookies;
+            proxyHeaders.set('cookie', merged);
+            console.log('[CF BYPASS] Injecting cached CF cookies for', originalHost);
+        }
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
         fetchOptions.signal = controller.signal;
@@ -2135,8 +2239,11 @@ int main() {
                 };
                 if (response.headers.getSetCookie) {
                     const cookies = response.headers.getSetCookie();
+                    // Cache Cloudflare cookies for future requests
+                    setCfCookies(originalHost, cookies);
                     res.setHeader('Set-Cookie', cookies.map(cleanCookie));
                 } else {
+                    if (value.includes('cf_clearance')) setCfCookies(originalHost, [value]);
                     res.setHeader(key, cleanCookie(value));
                 }
             } else {
