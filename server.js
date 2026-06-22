@@ -369,14 +369,19 @@ const getStealthScript = () => `
         } catch(e) {}
 
         // ====== LAYER 1.5: WEBRTC BLINDING ======
-        window.RTCPeerConnection = undefined;
-        window.webkitRTCPeerConnection = undefined;
-        window.mozRTCPeerConnection = undefined;
+        try {
+            var _noopRTC = function() { throw new DOMException('RTCPeerConnection is not available', 'NotSupportedError'); };
+            _noopRTC.prototype = {};
+            window.RTCPeerConnection = _noopRTC;
+            window.webkitRTCPeerConnection = _noopRTC;
+            window.mozRTCPeerConnection = _noopRTC;
+        } catch(e) {}
 
         // ====== LAYER 2: UNIVERSAL NETWORK INTERCEPTION ======
 
         var origFetch = window.fetch;
-        window.fetch = async function(...args) {
+        window.fetch = function() {
+            var args = Array.prototype.slice.call(arguments);
             var url = typeof args[0] === 'string' ? args[0] : (args[0] instanceof Request ? args[0].url : '');
             if (url.indexOf('http://') === 0 && url.indexOf(window.location.hostname) !== -1 && window.location.protocol === 'https:') {
                 url = url.replace('http://', 'https://');
@@ -402,7 +407,8 @@ const getStealthScript = () => `
         };
 
         var origOpen = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+        XMLHttpRequest.prototype.open = function(method, url) {
+            var rest = Array.prototype.slice.call(arguments, 2);
             if (typeof url === 'string') {
                 if (url.indexOf('http://') === 0 && url.indexOf(window.location.hostname) !== -1 && window.location.protocol === 'https:') {
                     url = url.replace('http://', 'https://');
@@ -411,7 +417,7 @@ const getStealthScript = () => `
                     url = _tunnelUrl(url);
                 }
             }
-            return origOpen.call(this, method, url, ...rest);
+            return origOpen.apply(this, [method, url].concat(rest));
         };
         var origSend = XMLHttpRequest.prototype.send;
         XMLHttpRequest.prototype.send = function(body) {
@@ -456,8 +462,8 @@ const getStealthScript = () => `
         } catch(e) {}
 
         var origImage = window.Image;
-        window.Image = function(...args) {
-            var img = new origImage(...args);
+        window.Image = function() {
+            var img = arguments.length > 0 ? new origImage(arguments[0], arguments[1]) : new origImage();
             var origSrcDesc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
             if (origSrcDesc && origSrcDesc.set) {
                 Object.defineProperty(img, 'src', {
@@ -470,11 +476,12 @@ const getStealthScript = () => `
         window.Image.prototype = origImage.prototype;
 
         var origWS = window.WebSocket;
-        window.WebSocket = function(url, ...rest) {
+        window.WebSocket = function(url, protocols) {
             if (typeof url === 'string') {
                 url = _tunnelUrl(url);
             }
-            return new origWS(url, ...rest);
+            if (protocols !== undefined) return new origWS(url, protocols);
+            return new origWS(url);
         };
         window.WebSocket.prototype = origWS.prototype;
 
