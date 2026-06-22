@@ -2014,7 +2014,12 @@ int main() {
             }
         } catch(e) {}
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+        fetchOptions.signal = controller.signal;
+
         const response = await fetch(fetchUrl, fetchOptions);
+        clearTimeout(timeoutId);
         
         if (req.method === 'POST') {
             console.log(`[POST DEBUG] Response Status: ${response.status}`);
@@ -2147,21 +2152,36 @@ int main() {
             // JS rewriting removed — client-side network hooks (fetch/XHR/WebSocket interception
             // in stealth script) handle all runtime URL routing safely without risking syntax corruption
             res.setHeader("Content-Type", contentType);
+            res.setHeader("X-Proxy-Debug", "true");
+            res.setHeader("X-Upstream-Status", response.status);
             return res.send(jsContent);
         }
         
         if (response.body) {
             const arrayBuffer = await response.arrayBuffer();
+            res.setHeader("X-Proxy-Debug", "true");
+            res.setHeader("X-Upstream-Status", response.status);
             res.send(Buffer.from(arrayBuffer));
         } else {
+            res.setHeader("X-Proxy-Debug", "true");
+            res.setHeader("X-Upstream-Status", response.status);
             res.send();
         }
 
     } catch (err) {
         console.error("PROXY FETCH EXCEPTION for URL:", fetchUrl, err);
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
         res.status(503).send("Proxy error fetching " + fetchUrl + ": " + err.message + "\n" + err.stack);
     }
 });
+
+app.use((err, req, res, next) => {
+    console.error("GLOBAL PROXY ERROR:", err);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.status(503).send("Global proxy error: " + err.message);
+});
+
 if (process.env.VERCEL) {
     module.exports = app;
 } else {
