@@ -2213,12 +2213,81 @@ int main() {
         const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
         fetchOptions.signal = controller.signal;
 
-        const response = await fetch(fetchUrl, fetchOptions);
+        let response = await fetch(fetchUrl, fetchOptions);
         clearTimeout(timeoutId);
+
+        // ═══════════════════════════════════════════════════════════════
+        // CLOUDFLARE TLS BYPASS — curl fallback
+        // Node.js has a detectable TLS fingerprint. When Cloudflare returns
+        // its "Just a moment..." challenge (403), retry with the system's
+        // curl binary which has a legitimate browser-like TLS fingerprint.
+        // ═══════════════════════════════════════════════════════════════
+        if (response.status === 403 && req.method === 'GET') {
+            const peekBody = await response.text();
+            if (peekBody.includes('Just a moment') || peekBody.includes('challenges.cloudflare.com')) {
+                console.log('[CF BYPASS] Cloudflare challenge detected for', fetchUrl, '— retrying with curl');
+                try {
+                    const { execSync } = require('child_process');
+                    // Use curl-impersonate (Chrome TLS fingerprint) on Linux, regular curl on Windows
+                    const isLinux = process.platform === 'linux';
+                    const curlBin = isLinux ? 
+                        ((() => { try { execSync('which curl-impersonate', {stdio:'pipe'}); return 'curl-impersonate'; } catch(e) { return 'curl'; } })()) : 
+                        'curl';
+                    
+                    // Build curl command with all headers
+                    const curlHeaders = [];
+                    for (const [k, v] of proxyHeaders.entries()) {
+                        if (k.toLowerCase() === 'host') continue; // curl sets this from URL
+                        curlHeaders.push(`-H "${k}: ${v.replace(/"/g, '\\"')}"`);
+                    }
+                    const curlCmd = `${curlBin} -sS -L --max-time 12 --compressed ${curlHeaders.join(' ')} "${fetchUrl}"`;
+                    console.log('[CF BYPASS] Using', curlBin, isLinux ? '(Linux)' : '(Windows)');
+                    const curlResult = execSync(curlCmd, { maxBuffer: 10 * 1024 * 1024, timeout: 13000 });
+                    const curlText = curlResult.toString('utf8');
+                    
+                    // If curl got past Cloudflare, use its response
+                    if (!curlText.includes('Just a moment') && curlText.length > 100) {
+                        console.log('[CF BYPASS] curl succeeded! Got', curlText.length, 'bytes');
+                        // Create a synthetic response object
+                        const isHtml = curlText.trimStart().startsWith('<') || curlText.includes('<!DOCTYPE');
+                        response = {
+                            status: 200,
+                            headers: new Map([
+                                ['content-type', isHtml ? 'text/html; charset=utf-8' : 'application/octet-stream']
+                            ]),
+                            text: async () => curlText,
+                            arrayBuffer: async () => curlResult.buffer,
+                            _isCurlResponse: true
+                        };
+                        // Make headers iterable like a real response
+                        response.headers.get = (k) => response.headers.get(k) || response.headers.get(k.toLowerCase()) || '';
+                        response.headers.entries = () => response.headers.entries();
+                    }
+                } catch(curlErr) {
+                    console.log('[CF BYPASS] curl failed:', curlErr.message);
+                    // Return the original CF challenge page so user sees something
+                    const ct = 'text/html; charset=utf-8';
+                    res.setHeader('Content-Type', ct);
+                    res.setHeader('Access-Control-Allow-Origin', '*');
+                    return res.status(403).send(peekBody);
+                }
+            } else {
+                // It was a real 403, not CF. We already consumed the body, so re-wrap it.
+                const origStatus = response.status;
+                const origHeaders = response.headers;
+                response = {
+                    status: origStatus,
+                    headers: origHeaders,
+                    text: async () => peekBody,
+                    arrayBuffer: async () => Buffer.from(peekBody, 'utf8'),
+                    _isPeeked: true
+                };
+            }
+        }
         
         if (req.method === 'POST') {
             console.log(`[POST DEBUG] Response Status: ${response.status}`);
-            console.log(`[POST DEBUG] Response Headers:`, JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2));
+            try { console.log(`[POST DEBUG] Response Headers:`, JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)); } catch(e) {}
         }
 
         const contentType = response.headers.get("content-type") || "";
