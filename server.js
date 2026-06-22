@@ -2263,19 +2263,41 @@ int main() {
                         response.headers.get = (k) => response.headers.get(k) || '';
                         response.headers.entries = () => response.headers.entries();
                     } else {
-                        // curl also got blocked — return the CF challenge page directly
-                        console.log('[CF BYPASS] curl also blocked by Cloudflare');
+                        // curl also got blocked — serve CF challenge WITH stealth script
+                        // so the user's real browser can solve it through our proxy
+                        console.log('[CF BYPASS] curl also blocked — serving challenge through proxy');
+                        const cfStealth = getStealthScript(proxyDomain);
+                        let cfHtml = peekBody;
+                        // Inject stealth script so CF verification callbacks go through proxy
+                        const cfHeadMatch = cfHtml.match(/<head[^>]*>/i);
+                        if (cfHeadMatch) {
+                            cfHtml = cfHtml.replace(cfHeadMatch[0], cfHeadMatch[0] + '\n' + cfStealth);
+                        } else {
+                            cfHtml = cfStealth + '\n' + cfHtml;
+                        }
                         res.setHeader('Content-Type', 'text/html; charset=utf-8');
                         res.setHeader('Access-Control-Allow-Origin', '*');
-                        return res.status(403).send(peekBody);
+                        // Don't set CSP so CF challenge scripts can run freely
+                        res.removeHeader('content-security-policy');
+                        res.removeHeader('content-security-policy-report-only');
+                        return res.status(200).send(cfHtml); // 200 so browser renders it
                     }
                 } catch(curlErr) {
                     console.log('[CF BYPASS] curl failed:', curlErr.message);
-                    // Return the original CF challenge page so user sees something
-                    const ct = 'text/html; charset=utf-8';
-                    res.setHeader('Content-Type', ct);
+                    // Serve CF challenge WITH stealth script
+                    const cfStealth = getStealthScript(proxyDomain);
+                    let cfHtml = peekBody;
+                    const cfHeadMatch = cfHtml.match(/<head[^>]*>/i);
+                    if (cfHeadMatch) {
+                        cfHtml = cfHtml.replace(cfHeadMatch[0], cfHeadMatch[0] + '\n' + cfStealth);
+                    } else {
+                        cfHtml = cfStealth + '\n' + cfHtml;
+                    }
+                    res.setHeader('Content-Type', 'text/html; charset=utf-8');
                     res.setHeader('Access-Control-Allow-Origin', '*');
-                    return res.status(403).send(peekBody);
+                    res.removeHeader('content-security-policy');
+                    res.removeHeader('content-security-policy-report-only');
+                    return res.status(200).send(cfHtml);
                 }
             } else {
                 // It was a real 403, not CF. We already consumed the body, so re-wrap it.
