@@ -1992,12 +1992,20 @@ int main() {
             res.setHeader("Access-Control-Allow-Origin", "*");
         }
 
-        // 3. BUILD PROXY REQUEST
+        // 3. BUILD PROXY REQUEST — Make it look EXACTLY like Chrome
         const proxyHeaders = new Headers();
         
+        // Headers to skip (we set these ourselves below)
+        const SKIP_HEADERS = ['host', 'connection', 'content-length', 
+            'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port', 
+            'x-forwarded-host', 'x-real-ip', 'cf-connecting-ip', 'cf-ray',
+            'x-railway-request-id', 'x-railway-edge', 'x-hikari-trace', 'via',
+            'fly-client-ip', 'fly-forwarded-port', 'fly-request-id'];
+        
         for (const [key, value] of Object.entries(req.headers)) {
-            if (['host', 'connection', 'accept-encoding', 'content-length', 'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port', 'x-real-ip', 'cf-connecting-ip'].includes(key.toLowerCase())) continue;
-            if (key.toLowerCase().startsWith('sec-fetch-')) continue;
+            if (SKIP_HEADERS.includes(key.toLowerCase())) continue;
+            // sec-fetch-* headers: rewrite to correct values (don't strip!)
+            if (key.toLowerCase().startsWith('sec-fetch-')) continue; // we add correct ones below
             
             if (key.toLowerCase() === 'origin' || key.toLowerCase() === 'referer') {
                 let rewrittenValue = value;
@@ -2024,6 +2032,52 @@ int main() {
             }
         }
         proxyHeaders.set("Host", originalHost);
+        
+        // === CHROME BROWSER IMPERSONATION ===
+        // Cloudflare checks for these headers. A real browser ALWAYS sends them.
+        // Missing sec-fetch-* = instant bot detection = 403
+        proxyHeaders.set("sec-fetch-dest", req.headers['sec-fetch-dest'] || "document");
+        proxyHeaders.set("sec-fetch-mode", req.headers['sec-fetch-mode'] || "navigate");
+        proxyHeaders.set("sec-fetch-site", "none");  // Always "none" — we're the origin
+        proxyHeaders.set("sec-fetch-user", "?1");
+        
+        // Chrome client hints — Cloudflare checks for these too
+        if (!proxyHeaders.has("sec-ch-ua")) {
+            proxyHeaders.set("sec-ch-ua", '"Chromium";v="131", "Not_A Brand";v="24", "Google Chrome";v="131"');
+        }
+        if (!proxyHeaders.has("sec-ch-ua-mobile")) {
+            proxyHeaders.set("sec-ch-ua-mobile", "?0");
+        }
+        if (!proxyHeaders.has("sec-ch-ua-platform")) {
+            proxyHeaders.set("sec-ch-ua-platform", '"Windows"');
+        }
+        
+        // Accept-Encoding — MUST be present (bots strip it, browsers don't)
+        proxyHeaders.set("accept-encoding", "gzip, deflate, br");
+        
+        // Ensure User-Agent is a real Chrome UA
+        if (!proxyHeaders.has("user-agent") || !proxyHeaders.get("user-agent").includes("Chrome")) {
+            proxyHeaders.set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+        }
+        
+        // Ensure Accept is browser-like
+        if (!proxyHeaders.has("accept") || proxyHeaders.get("accept") === '*/*') {
+            if (req.path.endsWith('.js')) {
+                proxyHeaders.set("accept", "*/*");
+            } else if (req.path.endsWith('.css')) {
+                proxyHeaders.set("accept", "text/css,*/*;q=0.1");
+            } else {
+                proxyHeaders.set("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
+            }
+        }
+        if (!proxyHeaders.has("accept-language")) {
+            proxyHeaders.set("accept-language", "en-US,en;q=0.9");
+        }
+        
+        // Upgrade-Insecure-Requests — browsers send this on navigation
+        if (req.method === 'GET' && !req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|ico)$/i)) {
+            proxyHeaders.set("upgrade-insecure-requests", "1");
+        }
         
         // SPOOFING: Only inject IP headers when SPOOF_IP is explicitly configured
         // Avoids Cloudflare Error 1000 and header mismatches with CDN-protected sites
