@@ -1,3 +1,4 @@
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -259,6 +260,9 @@ const getStealthScript = () => `
                 if (parsed.hostname.endsWith(proxySuffix)) return url;
                 var dashed = parsed.hostname.replace(/-/g, '--').replace(/\./g, '-');
                 parsed.hostname = dashed + proxySuffix;
+                if (window.location.protocol === 'https:' && parsed.protocol === 'http:') {
+                    parsed.protocol = 'https:';
+                }
                 return parsed.href;
             } catch(e) {
                 return url;
