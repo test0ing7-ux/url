@@ -1390,6 +1390,30 @@ app.all('*', async (req, res, next) => {
         originalHost = parsedTarget.host;
         fetchUrl = parsedTarget.href;
 
+        // --- AMCAT API ROUTING FIX ---
+        // The amcatglobal static CDN rejects POST requests. 
+        // The Angular app incorrectly routes API calls to its own origin, so we must intercept and forward them.
+        if (originalHost === 'amcatglobal.aspiringminds.com' && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+            let targetApiHost = 'amcatapi.aspiringminds.com';
+            
+            // Try to extract the correct regional API host from the JWT token in the referer
+            try {
+                const refererStr = req.headers.referer || req.originalUrl || '';
+                const tokenMatch = refererStr.match(/token=([^&]+)/);
+                if (tokenMatch) {
+                    const jwtPayload = JSON.parse(Buffer.from(tokenMatch[1].split('.')[1], 'base64').toString('utf8'));
+                    if (jwtPayload.aud) {
+                        targetApiHost = new URL(jwtPayload.aud).host;
+                    }
+                }
+            } catch(e) {}
+
+            originalHost = targetApiHost;
+            parsedTarget.hostname = targetApiHost;
+            fetchUrl = parsedTarget.href;
+        }
+        // -----------------------------
+
         // SPY LOG: College Wi-Fi Router (POST-stealth = what they actually see)
         // PRE-stealth = what they WOULD see if you connected directly without proxy
         if (!req.path.startsWith('/__')) {
