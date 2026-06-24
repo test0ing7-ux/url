@@ -3,8 +3,6 @@ const path = require("node:path");
 const express = require("express");
 const { createBareServer } = require("@tomphttp/bare-server-node");
 const { uvPath } = require("@titaniumnetwork-dev/ultraviolet");
-const { baremuxPath } = require("@mercuryworkshop/bare-mux/node");
-const epoxyPath = path.join(__dirname, "node_modules", "@mercuryworkshop", "epoxy-transport", "dist");
 
 // ═══════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -41,12 +39,6 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // UV client-side files (uv.bundle.js, uv.client.js, uv.handler.js, uv.sw.js)
 app.use("/uv/", express.static(uvPath));
-
-// BareMux worker (used by UV's service worker to manage transports)
-app.use("/baremux/", express.static(baremuxPath));
-
-// Epoxy transport (encrypted WebSocket via Wisp)
-app.use("/epoxy/", express.static(epoxyPath));
 
 // ═══════════════════════════════════════════════════════════════
 // SOLVER API — proxies AI requests so they work behind firewalls
