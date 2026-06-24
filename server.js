@@ -2068,6 +2068,8 @@ int main() {
                 proxyHeaders.set("accept", "*/*");
             } else if (req.path.endsWith('.css')) {
                 proxyHeaders.set("accept", "text/css,*/*;q=0.1");
+            } else if (req.path.includes('/api/')) {
+                proxyHeaders.set("accept", "application/json, text/plain, */*");
             } else {
                 proxyHeaders.set("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
             }
@@ -2214,7 +2216,6 @@ int main() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
         fetchOptions.signal = controller.signal;
-
         let response = await fetch(fetchUrl, fetchOptions);
         clearTimeout(timeoutId);
 
