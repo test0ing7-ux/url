@@ -105,10 +105,10 @@ function getTargetProxyUrl(url, proxyDomain) {
     try {
         const parsed = new URL(url);
         if (parsed.hostname.endsWith(proxyDomain)) return url;
-        const dashed = parsed.hostname.replace(/-/g, '--').replace(/\./g, '-');
-        const suffix = proxyDomain.startsWith('.') ? proxyDomain : '.' + proxyDomain;
-        parsed.hostname = dashed + suffix;
-        return parsed.href;
+        const suffix = proxyDomain.startsWith('.') ? proxyDomain.substring(1) : proxyDomain;
+        // Hardcode exam.testpad as the base proxy since we only have one domain on Railway free tier
+        // This makes sure href/src links hit the correct path proxy instead of a non-existent wildcard domain
+        return `https://exam.testpad.chitkarauniversity.edu.in.${suffix}/${parsed.protocol}//${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
     } catch(e) { return url; }
 }
 
@@ -283,12 +283,15 @@ const getStealthScript = () => `
                 }
                 if (!proxySuffix) return url;
                 if (parsed.hostname.endsWith(proxySuffix)) return url;
-                var dashed = parsed.hostname.replace(/-/g, '--').replace(/\./g, '-');
-                parsed.hostname = dashed + proxySuffix;
-                if (window.location.protocol === 'https:' && parsed.protocol === 'http:') {
-                    parsed.protocol = 'https:';
-                }
-                return parsed.href;
+                
+                // Use single-domain Path proxying instead of Wildcard Subdomain proxying
+                var isWs = parsed.protocol === 'ws:' || parsed.protocol === 'wss:';
+                var proxyProto = isWs ? (window.location['protocol'] === 'https:' ? 'wss:' : 'ws:') : window.location['protocol'];
+                var tunnelHost = window.location['origin'].replace(/^https?:/, proxyProto);
+                
+                // We use /https:/ instead of /https:// because the server path router strips one slash sometimes or handles both
+                // The proxy expects /https://infra.assess...
+                return tunnelHost + '/' + parsed.protocol + '//' + parsed.host + parsed.pathname + parsed.search + parsed.hash;
             } catch(e) {
                 return url;
             }
@@ -306,9 +309,11 @@ const getStealthScript = () => `
                         break;
                     }
                 }
-                if (hasProxySuffix && window.location['href'].indexOf('/fetch/') === -1 && window.location['href'].indexOf('/https:/') === -1) {
-                    return getTargetProxyUrl(u);
-                }
+                // ALWAYS use path-based routing (Single Domain Proxy) instead of Subdomain routing
+                // This allows free tiers (like Railway/Vercel) to proxy multiple domains through ONE custom domain!
+                // if (hasProxySuffix && window.location['href'].indexOf('/fetch/') === -1 && window.location['href'].indexOf('/https:/') === -1) {
+                //    return getTargetProxyUrl(u);
+                // }
 
                 var p = new URL(u, window.location['href']);
                 if (p.pathname.startsWith('/fetch/') || p.pathname.startsWith('/https:/') || p.pathname.startsWith('/http:/') || p.pathname.startsWith('/wss:/') || p.pathname.startsWith('/ws:/')) return p.href;
