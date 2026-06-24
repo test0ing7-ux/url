@@ -37,37 +37,15 @@ function extractDomains(host) {
         return { originalHost: process.env.DEFAULT_TARGET || "exam.testpad.chitkarauniversity.edu.in", proxyDomain: "" };
     }
     
-    const envProxy = process.env.PROXY_DOMAIN;
-    let proxySuffix = "";
-    if (envProxy && host.endsWith(envProxy)) {
-        proxySuffix = envProxy;
-    } else if (host.endsWith('.chitkara.dns.navy')) {
-        proxySuffix = '.chitkara.dns.navy';
-    } else if (host.endsWith('.chitkara.v6.navy')) {
-        proxySuffix = '.chitkara.v6.navy';
-    } else if (host.endsWith('.edvu.in')) {
-        proxySuffix = '.edvu.in';
+    if (host.endsWith('.chitkara.dns.navy') || host.endsWith('.edvu.in')) {
+        // FORCE Single-Domain Path Routing mode.
+        // This solves the Railway multi-level wildcard limitation.
+        return { 
+            originalHost: "exam.testpad.chitkarauniversity.edu.in", 
+            proxyDomain: "" 
+        };
     }
-    if (proxySuffix) {
-        let subdomain = host.slice(0, -proxySuffix.length);
-        if (subdomain && subdomain !== 'test') {
-            // If subdomain has dashes or dots, flatten it to dashes so Railway wildcard routes it properly.
-            // But if it's the main entry page matching the app's check, we let the app load it.
-            // Actually, we must convert dotted subdomains to hyphens to prevent 000/404 on Railway.
-            if (subdomain.includes('-') || subdomain.includes('.')) {
-                const processed = subdomain.replace(/-/g, '.');
-                return {
-                    originalHost: processed,
-                    proxyDomain: proxySuffix
-                };
-            } else {
-                return {
-                    originalHost: subdomain,
-                    proxyDomain: proxySuffix
-                };
-            }
-        }
-    }
+
 
     const tlds = ['.com', '.org', '.net', '.edu', '.gov', '.mil', '.int', '.in', '.co.uk', '.edu.in', '.ac.in', '.io', '.app', '.dev', '.me', '.co', '.us', '.info', '.biz', '.tv', '.xyz'];
     tlds.sort((a, b) => b.length - a.length);
