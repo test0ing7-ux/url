@@ -75,19 +75,47 @@ app.post("/__solver_api", async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// ENTRY POINT — /e/https://anysite.com/path
-// Registers the UV Service Worker and redirects transparently
+// PROXY SUFFIX — strip this from hostname to get target domain
 // ═══════════════════════════════════════════════════════════════
-app.get("/e/*", (req, res) => {
-    // Everything after /e/ is the target URL
-    const targetUrl = req.originalUrl.slice(3);
+const PROXY_SUFFIXES = ['.chitkara.dns.navy', '.up.railway.app'];
+
+function extractTarget(hostname) {
+    for (const suffix of PROXY_SUFFIXES) {
+        if (hostname.endsWith(suffix)) {
+            const target = hostname.slice(0, -suffix.length);
+            if (target) return target;
+        }
+    }
+    return null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CATCH-ALL — auto-detect target from hostname, bootstrap UV
+// exam.testpad.chitkarauniversity.edu.in.chitkara.dns.navy/test/...
+// → target = exam.testpad.chitkarauniversity.edu.in
+// → path = /test/...
+// ═══════════════════════════════════════════════════════════════
+app.use((req, res, next) => {
+    // Skip internal UV/bare/static routes
+    if (req.path.startsWith('/uv/') || req.path.startsWith('/bare/') || 
+        req.path.startsWith('/baremux/') || req.path.startsWith('/epoxy/') ||
+        req.path.startsWith('/wisp/') || req.path === '/sw.js' ||
+        req.path.startsWith('/__') || req.path.startsWith('/s/')) {
+        return next();
+    }
+    
+    const host = req.headers.host || '';
+    const target = extractTarget(host);
+    
+    if (!target) {
+        // Root domain or unknown — show landing page
+        return res.sendFile(path.join(__dirname, "public", "index.html"));
+    }
+    
+    // Build the full target URL
+    const targetUrl = 'https://' + target + req.originalUrl;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(getBootstrapPage(targetUrl));
-});
-
-// Root page — simple search/entry
-app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 // ═══════════════════════════════════════════════════════════════
