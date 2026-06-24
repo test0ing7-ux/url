@@ -2,7 +2,7 @@ const http = require("node:http");
 const path = require("node:path");
 const zlib = require("node:zlib");
 const express = require("express");
-const { createProxyMiddleware } = require("http-proxy-middleware");
+const { createProxyMiddleware, responseInterceptor } = require("http-proxy-middleware");
 
 // ═══════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -85,69 +85,50 @@ app.use('/__speedmock__', (req, res) => {
 // Testpad app calls directly (e.g. infra.assess.testpad...)
 // URL format: /__extproxy__/<host>/<path>
 // ═══════════════════════════════════════════════════════════════
-app.use('/__extproxy__', async (req, res) => {
-    try {
-        // Extract host from path: /__extproxy__/infra.assess.testpad.chitkara.edu.in/api/foo
-        const parts = req.originalUrl.replace('/__extproxy__/', '').split('/');
-        const extHost = parts.shift();
-        const extPath = '/' + parts.join('/');
-        const extUrl = `https://${extHost}${extPath}`;
-
-        const headers = { ...req.headers };
-        delete headers.host;
-        headers.host = extHost;
-        delete headers['accept-encoding']; // Get uncompressed
-
+app.use('/__extproxy__', createProxyMiddleware({
+    router: (req) => {
+        const parts = req.url.split('/');
+        const extHost = parts[1]; // req.url is like /infra.assess.../api/... because it's mounted on /__extproxy__
+        return `https://${extHost}`;
+    },
+    pathRewrite: (path, req) => {
+        const parts = req.url.split('/');
+        const extHost = parts[1];
+        return req.url.replace(`/${extHost}`, '');
+    },
+    changeOrigin: true,
+    secure: false,
+    onProxyReq: (proxyReq, req, res) => {
         console.log(`\n[ExtProxy] === OUTBOUND REQUEST ===`);
-        console.log(`[ExtProxy] URL: ${extUrl}`);
-        console.log(`[ExtProxy] Method: ${req.method}`);
-        console.log(`[ExtProxy] Request Cookies:`, headers.cookie || 'NONE (This might be why it fails!)');
-        
-        const response = await fetch(extUrl, {
-            method: req.method,
-            headers,
-            redirect: 'follow',
-            body: ['GET', 'HEAD'].includes(req.method) ? undefined : req
-        });
-
+        console.log(`[ExtProxy] URL: ${proxyReq.protocol}//${proxyReq.host}${proxyReq.path}`);
+        console.log(`[ExtProxy] Method: ${proxyReq.method}`);
+        proxyReq.removeHeader('accept-encoding');
+    },
+    onProxyRes: responseInterceptor(async (responseBuffer, proxyRes, req, res) => {
         console.log(`[ExtProxy] === INCOMING RESPONSE ===`);
-        console.log(`[ExtProxy] Status: ${response.status} ${response.statusText}`);
+        console.log(`[ExtProxy] Status: ${proxyRes.statusCode}`);
         
-        // Copy response headers
-        for (const [key, value] of response.headers.entries()) {
-            if (!['content-encoding', 'transfer-encoding', 'content-length',
-                   'content-security-policy', 'strict-transport-security'].includes(key.toLowerCase())) {
-                
-                if (key.toLowerCase() === 'set-cookie') {
-                    // native fetch headers.entries() returns a comma separated string which breaks Date strings.
-                    // Use getSetCookie() instead.
-                    let cookies = response.headers.getSetCookie();
-                    if (cookies && cookies.length > 0) {
-                        cookies = cookies.map(c => c.replace(/Domain=[^;]+;/ig, '').replace(/Domain=[^;]+/ig, ''));
-                        res.setHeader(key, cookies);
-                    }
-                } else {
-                    res.setHeader(key, value);
-                }
+        // Strip Domain= from Set-Cookie
+        if (proxyRes.headers['set-cookie']) {
+            let cookies = proxyRes.headers['set-cookie'];
+            if (!Array.isArray(cookies)) cookies = [cookies];
+            res.setHeader('set-cookie', cookies.map(c => c.replace(/Domain=[^;]+;/ig, '').replace(/Domain=[^;]+/ig, '')));
+        }
+        res.setHeader('Access-Control-Allow-Origin', '*');
+
+        const contentType = proxyRes.headers['content-type'] || '';
+        if (contentType.includes('application/json') || contentType.includes('text/')) {
+            let data = responseBuffer.toString('utf8');
+            if (data.includes('"endTime"')) {
+                console.log(`[ExtProxy] Spoofing endTime!`);
+                data = data.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
             }
-        }
-        res.setHeader('Access-Control-Allow-Origin', '*');
-
-        let data = await response.text();
-
-        // Spoof endTime in API responses
-        if (data.includes('"endTime"')) {
-            console.log(`[ExtProxy] Spoofing endTime!`);
-            data = data.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
+            return data;
         }
 
-        res.status(response.status).send(data);
-    } catch (e) {
-        console.error('[ExtProxy] Error:', e.message);
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.status(502).json({ error: 'External proxy error' });
-    }
-});
+        return responseBuffer;
+    })
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // REVERSE PROXY — Pure server-side proxying. No service workers,
