@@ -1,1 +1,0 @@
-fetch('https://amcatglobal.aspiringminds.com/main.e3081ad07ef367ab.js').then(async r => { const txt = await r.text(); const idx = txt.indexOf('/auth/login'); if(idx !== -1) console.log(txt.substring(Math.max(0, idx-100), idx+100)); else console.log('Not found'); }).catch(console.error)

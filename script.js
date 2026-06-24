@@ -1,1 +1,0 @@
-fetch('https://amcatglobal.aspiringminds.com/main.e3081ad07ef367ab.js').then(async r => { const txt = await r.text(); const matches = txt.match(/https:\/\/[^\s\"'\\]+/g); if(matches) console.log([...new Set(matches)]); }).catch(console.error)

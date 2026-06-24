@@ -9,7 +9,7 @@
   "dependencies": {
     "@mercuryworkshop/bare-as-module3": "^2.2.5",
     "@mercuryworkshop/bare-mux": "^2.1.9",
-    "@mercuryworkshop/epoxy-transport": "^3.0.1",
+    "@mercuryworkshop/epoxy-transport": "^2.1.28",
     "@mercuryworkshop/wisp-js": "^0.4.1",
     "@titaniumnetwork-dev/ultraviolet": "^3.2.10",
     "@tomphttp/bare-server-node": "^2.0.6",
