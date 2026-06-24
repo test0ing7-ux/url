@@ -132,20 +132,23 @@ function getBootstrapPage(targetUrl) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Loading...</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#0a0a0a;color:#fff;font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh}
-.loader{text-align:center}
+*{margin:0;padding:0;box-sizing:border-box;overflow:hidden}
+body{background:#0a0a0a;color:#fff;font-family:system-ui,sans-serif;height:100vh;width:100vw}
+#loader{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:10;background:#0a0a0a}
 .spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.1);border-top-color:#6366f1;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
 @keyframes spin{to{transform:rotate(360deg)}}
-p{color:rgba(255,255,255,.6);font-size:14px}
+p{color:rgba(255,255,255,.6);font-size:14px;text-align:center}
 .error{color:#ef4444;display:none;margin-top:12px;font-size:13px}
+#frame{position:fixed;top:0;left:0;width:100vw;height:100vh;border:none;z-index:1}
 </style>
 </head>
 <body>
-<div class="loader">
+<div id="loader">
+<div>
 <div class="spinner"></div>
 <p>Connecting...</p>
 <p class="error" id="err"></p>
+</div>
 </div>
 <script src="/uv/uv.bundle.js"></script>
 <script src="/uv/uv.config.js"></script>
@@ -155,16 +158,14 @@ p{color:rgba(255,255,255,.6);font-size:14px}
     try {
         if (!navigator.serviceWorker) throw new Error('Service Workers not supported');
         if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-            throw new Error('HTTPS required for Service Workers');
+            throw new Error('HTTPS required');
         }
         
-        // Register UV's service worker
         const reg = await navigator.serviceWorker.register('/sw.js', { 
             scope: __uv$config.prefix,
             updateViaCache: 'none'
         });
         
-        // Wait for SW to become active
         const sw = reg.active || reg.waiting || reg.installing;
         if (sw && sw.state !== 'activated') {
             await new Promise(function(resolve) {
@@ -176,14 +177,19 @@ p{color:rgba(255,255,255,.6);font-size:14px}
         }
         await navigator.serviceWorker.ready;
         
-        // Set up standard Bare transport
         const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
         const bareServerUrl = location.protocol + '//' + location.host + '/bare/';
         await conn.setTransport('/bare-client/index.mjs', [bareServerUrl]);
         
-        // Navigate to the proxied URL
+        // Load proxied site in full-screen iframe (keeps this page alive for SharedWorker)
         const target = '${safeUrl}';
-        location.href = __uv$config.prefix + __uv$config.encodeUrl(target);
+        const url = __uv$config.prefix + __uv$config.encodeUrl(target);
+        const f = document.createElement('iframe');
+        f.id = 'frame';
+        f.src = url;
+        f.setAttribute('allow', 'fullscreen; clipboard-read; clipboard-write; autoplay; camera; microphone');
+        document.body.appendChild(f);
+        f.onload = function() { document.getElementById('loader').style.display = 'none'; };
     } catch(e) {
         document.getElementById('err').style.display = 'block';
         document.getElementById('err').textContent = e.message;
