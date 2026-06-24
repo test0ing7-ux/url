@@ -38,9 +38,16 @@ function extractDomains(host) {
     }
     
     const envProxy = process.env.PROXY_DOMAIN;
-    const defaultProxy = ".chitkara.dns.navy";
-    const proxySuffix = (envProxy && host.endsWith(envProxy)) ? envProxy : (host.endsWith(defaultProxy) ? defaultProxy : "");
-
+    let proxySuffix = "";
+    if (envProxy && host.endsWith(envProxy)) {
+        proxySuffix = envProxy;
+    } else if (host.endsWith('.chitkara.dns.navy')) {
+        proxySuffix = '.chitkara.dns.navy';
+    } else if (host.endsWith('.chitkara.v6.navy')) {
+        proxySuffix = '.chitkara.v6.navy';
+    } else if (host.endsWith('.edvu.in')) {
+        proxySuffix = '.edvu.in';
+    }
     if (proxySuffix) {
         let subdomain = host.slice(0, -proxySuffix.length);
         if (subdomain && subdomain !== 'test') {
@@ -244,7 +251,7 @@ const getStealthScript = () => `
         // In subdomain mode, server-side domain replacement already makes all checks consistent.
         var _isSubdomainMode = false;
         (function() {
-            var _suf = ['.chitkara.dns.navy', '.up.railway.app', '.onrender.com', '.hf.space'];
+            var _suf = ['.chitkara.dns.navy', '.chitkara.v6.navy', '.edvu.in', '.up.railway.app', '.onrender.com', '.hf.space'];
             for (var si = 0; si < _suf.length; si++) {
                 if (window.location['hostname'].endsWith(_suf[si])) { _isSubdomainMode = true; break; }
             }
