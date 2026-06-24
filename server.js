@@ -156,6 +156,49 @@ app.use('/__extproxy__', createProxyMiddleware({
 }));
 
 // ═══════════════════════════════════════════════════════════════
+// DUMMY TEST PAGE — for testing the AI overlay locally
+// ═══════════════════════════════════════════════════════════════
+app.get('/dummy-test', (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Dummy Test</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 40px; background: #f4f4f9; }
+                .question-box { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 800px; margin: 0 auto 20px auto; }
+                .question-text { font-size: 18px; font-weight: bold; margin-bottom: 15px; }
+                .options { list-style-type: none; padding: 0; }
+                .option { background: #eef; padding: 10px; margin-bottom: 10px; border-radius: 4px; cursor: pointer; }
+                .option:hover { background: #ddf; }
+                .code-editor { background: #282a36; color: #f8f8f2; padding: 15px; font-family: monospace; border-radius: 4px; min-height: 150px; white-space: pre; border: none; width: 100%; box-sizing: border-box; }
+            </style>
+        </head>
+        <body>
+            <div class="question-box">
+                <div class="question-text">1. Multiple Choice: What is the output of console.log(typeof null) in JavaScript?</div>
+                <ul class="options">
+                    <li class="option">A) "undefined"</li>
+                    <li class="option">B) "null"</li>
+                    <li class="option">C) "object"</li>
+                    <li class="option">D) "number"</li>
+                </ul>
+            </div>
+            
+            <div class="question-box">
+                <div class="question-text">2. Coding Question: Write a function to reverse a string in Python.</div>
+                <p>Complete the function below so that it returns the reversed version of the input string.</p>
+                <textarea class="code-editor" spellcheck="false">def reverse_string(s):
+    # Write your code here
+    pass
+</textarea>
+            </div>
+        </body>
+        </html>
+    `);
+});
+
+// ═══════════════════════════════════════════════════════════════
 // REVERSE PROXY — Pure server-side proxying. No service workers,
 // no iframes, no bare-mux. Works everywhere including Electron.
 // ═══════════════════════════════════════════════════════════════
