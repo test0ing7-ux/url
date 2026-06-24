@@ -93,13 +93,16 @@ app.use('/__extproxy__', async (req, res) => {
         const extPath = '/' + parts.join('/');
         const extUrl = `https://${extHost}${extPath}`;
 
-        console.log(`[ExtProxy] ${extUrl}`);
-
         const headers = { ...req.headers };
         delete headers.host;
         headers.host = extHost;
         delete headers['accept-encoding']; // Get uncompressed
 
+        console.log(`\n[ExtProxy] === OUTBOUND REQUEST ===`);
+        console.log(`[ExtProxy] URL: ${extUrl}`);
+        console.log(`[ExtProxy] Method: ${req.method}`);
+        console.log(`[ExtProxy] Request Cookies:`, headers.cookie || 'NONE (This might be why it fails!)');
+        
         const response = await fetch(extUrl, {
             method: req.method,
             headers,
@@ -107,6 +110,9 @@ app.use('/__extproxy__', async (req, res) => {
             body: ['GET', 'HEAD'].includes(req.method) ? undefined : req
         });
 
+        console.log(`[ExtProxy] === INCOMING RESPONSE ===`);
+        console.log(`[ExtProxy] Status: ${response.status} ${response.statusText}`);
+        
         // Copy response headers
         for (const [key, value] of response.headers.entries()) {
             if (!['content-encoding', 'transfer-encoding', 'content-length',
