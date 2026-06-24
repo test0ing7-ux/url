@@ -239,6 +239,17 @@ const getStealthScript = () => `
             }
         }
 
+        // Detect subdomain mode — skip document/location spoofing to avoid mismatches
+        // that trigger "Unsupported Application" errors.
+        // In subdomain mode, server-side domain replacement already makes all checks consistent.
+        var _isSubdomainMode = false;
+        (function() {
+            var _suf = ['.chitkara.dns.navy', '.up.railway.app', '.onrender.com', '.hf.space'];
+            for (var si = 0; si < _suf.length; si++) {
+                if (window.location['hostname'].endsWith(_suf[si])) { _isSubdomainMode = true; break; }
+            }
+        })();
+
         var _bp = ['accounts.google.com','login.microsoftonline.com','login.live.com','auth0.com','okta.com',
             'googleapis.com','gstatic.com','google.com/recaptcha','www.google.com/recaptcha','recaptcha.net',
             'hcaptcha.com','challenges.cloudflare.com','cdn.jsdelivr.net','cdnjs.cloudflare.com',
@@ -345,6 +356,10 @@ const getStealthScript = () => `
         };
 
         // ====== LAYER 1: LOCATION SPOOFING ======
+        // In subdomain mode, skip spoofing — domain replacement handles consistency.
+        // Spoofing here would make document.domain != window.location.hostname, triggering
+        // "Unsupported Application" errors in Testpad/CodeQuotient.
+        if (!_isSubdomainMode) {
         var fakeLocationStr = window.location['href'];
         if (REAL_ORIGIN) {
             if (fakeLocationStr.indexOf('/fetch/') !== -1 || fakeLocationStr.indexOf('/https:/') !== -1 || fakeLocationStr.indexOf('/http:/') !== -1) {
@@ -393,8 +408,11 @@ const getStealthScript = () => `
                 }
             }
         } catch(e) {}
+        } // end if (!_isSubdomainMode) — location spoofing
 
         // ====== LAYER 1.5: WEBRTC BLINDING ======
+        // Disabled: Overwriting RTCPeerConnection breaks Jitsi and causes 'Unsupported Application' errors.
+        /*
         try {
             var _noopRTC = function() { throw new DOMException('RTCPeerConnection is not available', 'NotSupportedError'); };
             _noopRTC.prototype = {};
@@ -402,6 +420,7 @@ const getStealthScript = () => `
             window.webkitRTCPeerConnection = _noopRTC;
             window.mozRTCPeerConnection = _noopRTC;
         } catch(e) {}
+        */
 
         // ====== LAYER 2: UNIVERSAL NETWORK INTERCEPTION ======
 
@@ -532,10 +551,12 @@ const getStealthScript = () => `
         } catch(e) {}
 
         // ====== LAYER 4: CONSOLE PROTECTION ======
+        if (!_isSubdomainMode) {
         var origToString = Location.prototype.toString;
         Location.prototype.toString = function() {
             return scrub(origToString.call(this));
         };
+        }
 
         // ====== LAYER 5: SERVICE WORKER (NUCLEAR OPTION) ======
         // Registers a Service Worker that intercepts ALL requests at browser engine level.
