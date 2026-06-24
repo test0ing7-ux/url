@@ -1,5 +1,5 @@
 /*
- * Service Worker entry point.
+ * Service Worker entry point. v2
  * Must be served from /s/ scope (or same directory as UV files).
  * We importScripts from /uv/ with absolute paths since this SW lives at /sw.js (root).
  */

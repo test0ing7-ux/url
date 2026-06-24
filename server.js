@@ -178,6 +178,8 @@ function getBootstrapPage(targetUrl) {
             updateViaCache: 'none'
         });
         
+        await reg.update();
+        
         const sw = reg.active || reg.waiting || reg.installing;
         if (sw && sw.state !== 'activated') {
             await new Promise(function(resolve) {
