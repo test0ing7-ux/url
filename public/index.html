@@ -77,8 +77,8 @@ document.getElementById('form').addEventListener('submit', async function(e) {
         await navigator.serviceWorker.ready;
         
         const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
-        const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
-        await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
+        const bareServerUrl = location.protocol + '//' + location.host + '/bare/';
+        await conn.setTransport('/bare-client/index.mjs', [{ server: bareServerUrl }]);
         
         location.href = __uv$config.prefix + __uv$config.encodeUrl(url);
     } catch(e) {

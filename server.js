@@ -4,7 +4,7 @@ const express = require("express");
 const { createBareServer } = require("@tomphttp/bare-server-node");
 const { uvPath } = require("@titaniumnetwork-dev/ultraviolet");
 const { baremuxPath } = require("@mercuryworkshop/bare-mux/node");
-const epoxyPath = path.join(__dirname, "node_modules", "@mercuryworkshop", "epoxy-transport", "dist");
+const bareClientPath = path.join(__dirname, "node_modules", "@mercuryworkshop", "bare-as-module3", "dist");
 
 // ═══════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -24,7 +24,7 @@ const app = express();
 app.disable("x-powered-by");
 
 // ═══════════════════════════════════════════════════════════════
-// STATIC FILES — UV, BareMux, Epoxy transport
+// STATIC FILES — UV, BareMux, Transport
 // ═══════════════════════════════════════════════════════════════
 
 // Our custom public files FIRST (so our uv.config.js overrides the default)
@@ -36,8 +36,8 @@ app.use("/uv/", express.static(uvPath));
 // BareMux worker (used by UV's service worker to manage transports)
 app.use("/baremux/", express.static(baremuxPath));
 
-// Epoxy transport (WASM-based encrypted WebSocket transport — beats firewalls)
-app.use("/epoxy/", express.static(epoxyPath));
+// Bare transport (Standard bare client v3)
+app.use("/bare-client/", express.static(bareClientPath));
 
 // ═══════════════════════════════════════════════════════════════
 // SOLVER API — proxies AI requests so they work behind firewalls
@@ -176,10 +176,10 @@ p{color:rgba(255,255,255,.6);font-size:14px}
         }
         await navigator.serviceWorker.ready;
         
-        // Set up the transport (Epoxy = encrypted WebSocket, bypasses firewalls)
+        // Set up standard Bare transport
         const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
-        const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
-        await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
+        const bareServerUrl = location.protocol + '//' + location.host + '/bare/';
+        await conn.setTransport('/bare-client/index.mjs', [{ server: bareServerUrl }]);
         
         // Navigate to the proxied URL
         const target = '${safeUrl}';
