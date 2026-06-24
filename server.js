@@ -29,9 +29,8 @@ app.use((req, res, next) => {
 // ═══════════════════════════════════════════════════════════════
 // SOLVER API — proxies AI requests so they work behind firewalls
 // ═══════════════════════════════════════════════════════════════
-app.use(express.json({ limit: "5mb" }));
 
-app.post("/__solver_api", async (req, res) => {
+app.post("/__solver_api", express.json({ limit: "5mb" }), async (req, res) => {
     try {
         const payload = req.body.payload;
         let finalKey = API_KEY;
