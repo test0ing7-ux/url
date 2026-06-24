@@ -116,6 +116,32 @@ app.use('/__extproxy__', createProxyMiddleware({
         res.setHeader('Access-Control-Allow-Origin', '*');
 
         const contentType = proxyRes.headers['content-type'] || '';
+        
+        // Mock session/data if it returns 401 so the user can test the UI
+        if (req.url.includes('/quiz-api/session/data') && proxyRes.statusCode === 401) {
+            console.log(`[ExtProxy] Mocking session/data for 401 Unauthorized!`);
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            return JSON.stringify({
+                session: {
+                    userId: "mock_user",
+                    ssnid: "mock_ssnid",
+                    role: "student",
+                    email: "student@test.com",
+                    roleId: 1,
+                    displayname: "Mock Student",
+                    tryTest: 1,
+                    enrollmentId: "12345",
+                    isClassAllowed: 1,
+                    allowInteractiveMode: 1,
+                    projectSpace: 1,
+                    testingSpace: 1,
+                    learningSpace: 1,
+                    projectLanguagesAllowed: []
+                }
+            });
+        }
+
         if (contentType.includes('application/json') || contentType.includes('text/')) {
             let data = responseBuffer.toString('utf8');
             if (data.includes('"endTime"')) {
