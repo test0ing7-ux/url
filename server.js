@@ -26,6 +26,16 @@ app.disable("x-powered-by");
 // STATIC FILES — UV, BareMux, Transport
 // ═══════════════════════════════════════════════════════════════
 
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    next();
+});
+
 // Our custom public files FIRST (so our uv.config.js overrides the default)
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -109,6 +119,36 @@ app.use((req, res, next) => {
     if (!target) {
         // Root domain or unknown — show landing page
         return res.sendFile(path.join(__dirname, "public", "index.html"));
+    }
+    
+    // If the request specifically asks for JSON (like the Electron app pre-flight check)
+    // or if it's an API call, we should proxy it directly since the Service Worker isn't running yet.
+    if (req.query.json === '1' || req.headers.accept?.includes('application/json')) {
+        try {
+            const targetHost = req.hostname.replace(".chitkara.dns.navy", "");
+            const targetUrl = `https://${targetHost}${req.originalUrl}`;
+            console.log(`[API Proxy] Proxying pre-flight request to ${targetUrl}`);
+            
+            // Forward headers except host
+            const headers = { ...req.headers };
+            delete headers.host;
+            
+            fetch(targetUrl, {
+                method: req.method,
+                headers: headers
+            }).then(async response => {
+                const data = await response.text();
+                res.status(response.status).send(data);
+            }).catch(e => {
+                console.error('[API Proxy] Error:', e);
+                res.status(500).json({ error: 'Failed to fetch from target' });
+            });
+            return;
+        } catch (e) {
+            console.error('[API Proxy] Error:', e);
+            res.status(500).json({ error: 'Failed to fetch from target' });
+            return;
+        }
     }
     
     // Build the full target URL
