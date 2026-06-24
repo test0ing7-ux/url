@@ -51,18 +51,13 @@ function extractDomains(host) {
     if (proxySuffix) {
         let subdomain = host.slice(0, -proxySuffix.length);
         if (subdomain && subdomain !== 'test') {
-            // If subdomain has dashes, it's a flattened subdomain.
-            // We do NOT check for lack of dots because corrupted frontend URLs might mix them.
-            if (subdomain.includes('-')) {
-                const parts = subdomain.split('--');
-                const processedParts = parts.map(part => part.replace(/-/g, '.'));
-                const originalHost = processedParts.join('-');
-                // Validate: reject garbage hostnames (all dots/dashes, no real segments)
-                if (!originalHost || /^[.\-]+$/.test(originalHost) || !originalHost.match(/[a-zA-Z0-9]/)) {
-                    return { originalHost: host, proxyDomain: "" };
-                }
+            // If subdomain has dashes or dots, flatten it to dashes so Railway wildcard routes it properly.
+            // But if it's the main entry page matching the app's check, we let the app load it.
+            // Actually, we must convert dotted subdomains to hyphens to prevent 000/404 on Railway.
+            if (subdomain.includes('-') || subdomain.includes('.')) {
+                const processed = subdomain.replace(/-/g, '.');
                 return {
-                    originalHost: originalHost,
+                    originalHost: processed,
                     proxyDomain: proxySuffix
                 };
             } else {
