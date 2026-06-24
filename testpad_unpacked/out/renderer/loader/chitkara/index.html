@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Loader</title>
+</head>
+<style>
+  *{
+    padding: 0px;
+    margin: 0px;
+    overflow: hidden;
+  }
+  html{
+    background-color: transparent;
+    width: 100%;
+    height: 100%;
+  }
+  body{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: transparent;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background-color: #222020;
+  }
+  img{
+    display: block;
+    height: 100px;
+    width: auto;
+    pointer-events: none;
+  }
+  .title-text {
+    color: whitesmoke;
+    padding: 10px 0px;
+    transition: all 0.5s ease-in-out;
+    padding: 0px;
+  }
+  progress{
+    accent-color: orange;
+  }
+</style>
+<body>
+  <div><img src="../../assets/chitkara-BcVrxlHS.png"></div>
+  <p id="title" class="title-text">Loading.</p>
+  <p id="takingLogin" class="title-text" style="visibility: hidden;">It appears that your network is slow.</p>
+<script>
+  const title = document.getElementById("title");
+  function loading() {
+    const numberOfDots = (title.innerText.replace("Loading.","").length +1 ) % 3;
+    let textToReplaceWith = "Loading.";
+    for (let index = 0; index < numberOfDots; ++index) {
+      textToReplaceWith += '.';
+    }
+    title.innerText = textToReplaceWith;
+  }
+  setInterval(() => {
+    loading();
+  }, 1000);
+  setTimeout(() => {
+    document.getElementById('takingLogin').style.visibility = 'visible';
+  }, 10000);
+</script>
+</body>
+</html>

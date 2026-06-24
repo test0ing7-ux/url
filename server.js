@@ -1,8 +1,7 @@
 const http = require("node:http");
 const path = require("node:path");
 const express = require("express");
-const { createBareServer } = require("@tomphttp/bare-server-node");
-const { uvPath } = require("@titaniumnetwork-dev/ultraviolet");
+const { createProxyMiddleware } = require("http-proxy-middleware");
 
 // ═══════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -10,50 +9,28 @@ const { uvPath } = require("@titaniumnetwork-dev/ultraviolet");
 const PORT = parseInt(process.env.PORT || "3000");
 const API_KEY = process.env.API_KEY || "";
 
-// ═══════════════════════════════════════════════════════════════
-// BARE SERVER (handles all proxied requests from the Service Worker)
-// ═══════════════════════════════════════════════════════════════
-const bare = createBareServer("/bare/", {
-    logErrors: true,
-});
-
 const app = express();
 app.disable("x-powered-by");
 
 // ═══════════════════════════════════════════════════════════════
-// STATIC FILES — UV, BareMux, Transport
+// CORS — Allow Electron/Desktop apps to fetch from us
 // ═══════════════════════════════════════════════════════════════
-
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH');
+    res.header('Access-Control-Allow-Headers', '*');
     if (req.method === 'OPTIONS') {
         return res.sendStatus(200);
     }
     next();
 });
 
-// Our custom public files FIRST (so our uv.config.js overrides the default)
-app.use(express.static(path.join(__dirname, "public")));
-
-// UV client-side files (uv.bundle.js, uv.client.js, uv.handler.js, uv.sw.js)
-app.use("/uv/", express.static(uvPath));
-
 // ═══════════════════════════════════════════════════════════════
 // SOLVER API — proxies AI requests so they work behind firewalls
 // ═══════════════════════════════════════════════════════════════
-app.use("/__solver_api", express.json());
-app.options("/__solver_api", (req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    res.status(204).end();
-});
+app.use(express.json({ limit: "5mb" }));
 
 app.post("/__solver_api", async (req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     try {
         const payload = req.body.payload;
         let finalKey = API_KEY;
@@ -91,153 +68,155 @@ function extractTarget(hostname) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// CATCH-ALL — auto-detect target from hostname, bootstrap UV
+// REVERSE PROXY — Pure server-side proxying. No service workers,
+// no iframes, no bare-mux. Works everywhere including Electron.
 // ═══════════════════════════════════════════════════════════════
 app.use((req, res, next) => {
-    // Skip internal UV/bare/static routes
-    if (req.path.startsWith('/uv/') || req.path.startsWith('/bare/') || 
-        req.path.startsWith('/baremux/') || req.path.startsWith('/epoxy/') ||
-        req.path.startsWith('/wisp/') || req.path === '/sw.js' ||
-        req.path.startsWith('/__') || req.path.startsWith('/s/')) {
+    // Skip internal routes
+    if (req.path.startsWith('/__')) {
         return next();
     }
-    
+
     const host = req.headers.host || '';
     const target = extractTarget(host);
-    
+
     if (!target) {
+        // Root domain — serve landing page
         return res.sendFile(path.join(__dirname, "public", "index.html"));
     }
-    
-    // If the request specifically asks for JSON (like the Electron app pre-flight check)
-    // or if it's an API call, we should proxy it directly since the Service Worker isn't running yet.
-    if (req.query.json === '1' || req.headers.accept?.includes('application/json')) {
-        try {
-            const targetHost = req.hostname.replace(".chitkara.dns.navy", "");
-            const targetUrl = `https://${targetHost}${req.originalUrl}`;
-            console.log(`[API Proxy] Proxying pre-flight request to ${targetUrl}`);
-            
-            // Forward headers except host
-            const headers = { ...req.headers };
-            delete headers.host;
-            
-            fetch(targetUrl, {
-                method: req.method,
-                headers: headers
-            }).then(async response => {
+
+    // ─── JSON preflight (Testpad app pre-check) ───
+    // The Testpad app fetches ?json=1 before loading. We intercept
+    // and spoof the endTime so expired tests appear live.
+    if (req.query.json === '1') {
+        const targetUrl = `https://${target}${req.originalUrl}`;
+        console.log(`[API Proxy] Pre-flight: ${targetUrl}`);
+
+        const headers = { ...req.headers };
+        delete headers.host;
+        headers.host = target;
+
+        fetch(targetUrl, { method: req.method, headers, redirect: 'follow' })
+            .then(async (response) => {
                 let data = await response.text();
-                
-                // --- EXPIRE DATE SPOOFING ---
-                // If it's the test details JSON, change endTime so it's always live!
+                // Spoof endTime to 2027 so expired tests work
                 if (data.includes('"endTime"')) {
-                    console.log(`[API Proxy] Spoofing endTime to 2027 to make test live!`);
+                    console.log(`[API Proxy] Spoofing endTime to 2027!`);
                     data = data.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
                 }
-                
+                // Forward content-type
+                const ct = response.headers.get('content-type');
+                if (ct) res.setHeader('Content-Type', ct);
                 res.status(response.status).send(data);
-            }).catch(e => {
-                console.error('[API Proxy] Error:', e);
-                res.status(500).json({ error: 'Failed to fetch from target' });
+            })
+            .catch((e) => {
+                console.error('[API Proxy] Error:', e.message);
+                res.status(502).json({ error: 'Proxy error' });
             });
-            return;
-        } catch (e) {
-            console.error('[API Proxy] Error:', e);
-            res.status(500).json({ error: 'Failed to fetch from target' });
-            return;
-        }
+        return;
     }
-    
-    // Build the full target URL
-    const targetUrl = 'https://' + target + req.originalUrl;
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.send(getBootstrapPage(targetUrl));
-});
 
-// ═══════════════════════════════════════════════════════════════
-// BOOTSTRAP PAGE — registers SW then natively redirects
-// ═══════════════════════════════════════════════════════════════
-function getBootstrapPage(targetUrl) {
-    const safeUrl = targetUrl.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, '\\"');
-    
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>Proxy Redirect</title>
-</head>
-<body style="background:#0a0a0a">
-<script src="/uv/uv.bundle.js"></script>
-<script src="/uv/uv.config.js"></script>
-<script>
-(async function() {
-    try {
-        if (!navigator.serviceWorker) throw new Error('Service Workers not supported');
-        
-        const reg = await navigator.serviceWorker.register('/sw.js', { 
-            scope: __uv$config.prefix,
-            updateViaCache: 'none'
-        });
-        
-        await reg.update();
-        
-        const sw = reg.active || reg.waiting || reg.installing;
-        if (sw && sw.state !== 'activated') {
-            await new Promise(function(resolve) {
-                if (sw.state === 'activated') return resolve();
-                sw.addEventListener('statechange', function() {
-                    if (sw.state === 'activated') resolve();
+    // ─── Full reverse proxy for everything else ───
+    // Proxy the entire request to the real target server
+    const proxyTarget = `https://${target}`;
+
+    const proxy = createProxyMiddleware({
+        target: proxyTarget,
+        changeOrigin: true,
+        secure: true,
+        followRedirects: true,
+        selfHandleResponse: true,
+        on: {
+            proxyReq: (proxyReq, req) => {
+                // Set the correct Host header for the target
+                proxyReq.setHeader('Host', target);
+                // Remove headers that would break the proxy
+                proxyReq.removeHeader('x-forwarded-host');
+                proxyReq.removeHeader('x-forwarded-proto');
+                proxyReq.removeHeader('x-forwarded-for');
+            },
+            proxyRes: (proxyRes, req, res) => {
+                // Get content type
+                const contentType = proxyRes.headers['content-type'] || '';
+                const isHtml = contentType.includes('text/html');
+                const isJson = contentType.includes('application/json');
+
+                // Copy response headers
+                Object.keys(proxyRes.headers).forEach((key) => {
+                    // Skip headers that would break things
+                    if (['content-security-policy', 'content-security-policy-report-only',
+                         'x-frame-options', 'strict-transport-security',
+                         'content-encoding', 'transfer-encoding', 'content-length'].includes(key.toLowerCase())) {
+                        return;
+                    }
+                    res.setHeader(key, proxyRes.headers[key]);
                 });
-            });
+
+                // Override CORS
+                res.setHeader('Access-Control-Allow-Origin', '*');
+
+                // Collect the response body
+                const chunks = [];
+                proxyRes.on('data', (chunk) => chunks.push(chunk));
+                proxyRes.on('end', () => {
+                    let body = Buffer.concat(chunks);
+
+                    if (isHtml) {
+                        let html = body.toString('utf-8');
+
+                        // Rewrite absolute URLs in HTML so they stay on our proxy
+                        // e.g. https://exam.testpad.chitkarauniversity.edu.in/... 
+                        //    → https://exam.testpad.chitkarauniversity.edu.in.chitkara.dns.navy/...
+                        const escapedTarget = target.replace(/\./g, '\\.');
+                        const urlRegex = new RegExp(`https?://${escapedTarget}`, 'g');
+                        const proxyOrigin = `${req.protocol}://${req.headers.host}`;
+                        html = html.replace(urlRegex, proxyOrigin);
+
+                        // Also rewrite the assess.* variant that the app uses
+                        const assessTarget = target.replace('exam.', 'assess.');
+                        const escapedAssess = assessTarget.replace(/\./g, '\\.');
+                        const assessRegex = new RegExp(`https?://${escapedAssess}`, 'g');
+                        const assessHost = req.headers.host.replace('exam.', 'assess.');
+                        html = html.replace(assessRegex, `${req.protocol}://${assessHost}`);
+
+                        // Inject performance mock for Testpad speed test
+                        const perfMock = `<script>(function(){try{var fake=[{transferSize:1000,encodedBodySize:1000,decodedBodySize:1000,duration:50,startTime:0,responseEnd:50,name:"https://speed.cloudflare.com/__down?bytes=0",entryType:"resource",initiatorType:"fetch"}];var o=performance.getEntriesByName;performance.getEntriesByName=function(n,t){var r=o.call(performance,n,t);if(r&&r.length)return r;return fake};var p=performance.getEntries;performance.getEntries=function(){var r=p.call(performance);return r.concat(fake)};}catch(e){}})()</script>`;
+                        html = html.replace(/<head([^>]*)>/i, `<head$1>${perfMock}`);
+
+                        res.statusCode = proxyRes.statusCode;
+                        res.end(html);
+                    } else if (isJson) {
+                        let json = body.toString('utf-8');
+                        // Spoof endTime in JSON responses too
+                        if (json.includes('"endTime"')) {
+                            json = json.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
+                        }
+                        res.statusCode = proxyRes.statusCode;
+                        res.end(json);
+                    } else {
+                        // Binary/other — pass through as-is
+                        res.statusCode = proxyRes.statusCode;
+                        res.end(body);
+                    }
+                });
+            },
+            error: (err, req, res) => {
+                console.error('[Proxy Error]', err.message);
+                if (!res.headersSent) {
+                    res.status(502).send('Proxy Error');
+                }
+            }
         }
-        await navigator.serviceWorker.ready;
-        
-        // Natively navigate the browser! Looks completely natural!
-        const target = '${safeUrl}';
-        const url = __uv$config.prefix + __uv$config.encodeUrl(target);
-        location.href = url;
-    } catch(e) {
-        document.body.innerHTML = '<p style="color:red">' + e.message + '</p>';
-        console.error(e);
-    }
-})();
-</script>
-</body>
-</html>`;
-}
+    });
 
-// ═══════════════════════════════════════════════════════════════
-// HTTP SERVER + WISP + BARE UPGRADE HANDLING
-// ═══════════════════════════════════════════════════════════════
-const server = http.createServer();
-
-// Route HTTP requests
-server.on("request", (req, res) => {
-    // Bare server handles /bare/ routes
-    if (bare.shouldRoute(req)) {
-        bare.routeRequest(req, res);
-    } else {
-        app(req, res);
-    }
+    proxy(req, res, next);
 });
 
-// Route WebSocket upgrades (Bare + Wisp)
-server.on("upgrade", (req, socket, head) => {
-    if (bare.shouldRoute(req)) {
-        bare.routeUpgrade(req, socket, head);
-    } else if (req.url && req.url.startsWith("/wisp/")) {
-        // Wisp protocol for Epoxy transport
-        try {
-            const { server: wisp } = require("@mercuryworkshop/wisp-js/server");
-            wisp.routeRequest(req, socket, head);
-        } catch (e) {
-            console.error("Wisp error:", e.message);
-            socket.end();
-        }
-    } else {
-        socket.end();
-    }
-});
+// ═══════════════════════════════════════════════════════════════
+// HTTP SERVER
+// ═══════════════════════════════════════════════════════════════
+const server = http.createServer(app);
 
 server.listen(PORT, () => {
-    console.log(`Proxy running on port ${PORT}`);
+    console.log(`Reverse proxy server running on port ${PORT}`);
 });
