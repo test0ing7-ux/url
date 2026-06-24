@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Web Proxy</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0a;color:#fff;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.container{text-align:center;max-width:520px;width:100%;padding:20px}
+h1{font-size:28px;font-weight:700;margin-bottom:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.sub{color:rgba(255,255,255,.4);font-size:13px;margin-bottom:32px}
+.input-wrap{display:flex;gap:0;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,.1);transition:border-color .2s}
+.input-wrap:focus-within{border-color:#6366f1}
+input{flex:1;padding:14px 16px;background:rgba(255,255,255,.05);border:none;color:#fff;font-size:15px;outline:none}
+input::placeholder{color:rgba(255,255,255,.25)}
+button{padding:14px 24px;background:linear-gradient(135deg,#6366f1,#7c3aed);border:none;color:#fff;font-weight:600;cursor:pointer;font-size:15px;transition:opacity .2s}
+button:hover{opacity:.85}
+.hint{margin-top:16px;color:rgba(255,255,255,.3);font-size:12px}
+.error{color:#ef4444;margin-top:12px;font-size:13px;display:none}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Universal Proxy</h1>
+<p class="sub">Enter any URL to browse through the proxy</p>
+<form id="form">
+<div class="input-wrap">
+<input type="text" id="url" placeholder="https://example.com" autocomplete="off" autofocus>
+<button type="submit">Go</button>
+</div>
+</form>
+<p class="hint">Works with any site — Google, Cloudflare, auth, everything</p>
+<p class="error" id="err"></p>
+</div>
+
+<script src="/uv/uv.bundle.js"></script>
+<script src="/uv/uv.config.js"></script>
+<script src="/baremux/index.js"></script>
+<script>
+document.getElementById('form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('err');
+    errEl.style.display = 'none';
+    
+    let url = document.getElementById('url').value.trim();
+    if (!url) return;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+    }
+    
+    try {
+        new URL(url); // validate
+    } catch(e) {
+        errEl.textContent = 'Invalid URL';
+        errEl.style.display = 'block';
+        return;
+    }
+    
+    try {
+        if (!navigator.serviceWorker) throw new Error('Service Workers not supported');
+        
+        const reg = await navigator.serviceWorker.register('/sw.js', {
+            scope: __uv$config.prefix,
+            updateViaCache: 'none'
+        });
+        
+        const sw = reg.active || reg.waiting || reg.installing;
+        if (sw && sw.state !== 'activated') {
+            await new Promise(function(resolve) {
+                if (sw.state === 'activated') return resolve();
+                sw.addEventListener('statechange', function() {
+                    if (sw.state === 'activated') resolve();
+                });
+            });
+        }
+        await navigator.serviceWorker.ready;
+        
+        const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
+        const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
+        await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
+        
+        location.href = __uv$config.prefix + __uv$config.encodeUrl(url);
+    } catch(e) {
+        errEl.textContent = e.message;
+        errEl.style.display = 'block';
+        console.error(e);
+    }
+});
+</script>
+</body>
+</html>
