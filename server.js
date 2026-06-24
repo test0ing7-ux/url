@@ -179,7 +179,7 @@ p{color:rgba(255,255,255,.6);font-size:14px}
         // Set up standard Bare transport
         const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
         const bareServerUrl = location.protocol + '//' + location.host + '/bare/';
-        await conn.setTransport('/bare-client/index.mjs', [{ server: bareServerUrl }]);
+        await conn.setTransport('/bare-client/index.mjs', [bareServerUrl]);
         
         // Navigate to the proxied URL
         const target = '${safeUrl}';
