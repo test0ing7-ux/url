@@ -16,8 +16,7 @@ const API_KEY = process.env.API_KEY || "";
 // BARE SERVER (handles all proxied requests from the Service Worker)
 // ═══════════════════════════════════════════════════════════════
 const bare = createBareServer("/bare/", {
-    logErrors: false,
-    maintainer: undefined,
+    logErrors: true,
 });
 
 const app = express();
