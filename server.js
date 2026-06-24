@@ -248,7 +248,9 @@ app.use((req, res, next) => {
 
                     if (isText) {
                         let text = body.toString('utf-8');
-                        const proxyOrigin = `${req.protocol}://${req.headers.host}`;
+                        // Use https explicitly since the proxy handles SSL termination and req.protocol might be http
+                        const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+                        const proxyOrigin = `https://${req.headers.host}`;
 
                         // ── Rewrite same-domain absolute URLs ──
                         const escapedTarget = target.replace(/\./g, '\\\\.');
@@ -258,7 +260,7 @@ app.use((req, res, next) => {
                         const assessTarget = target.replace('exam.', 'assess.');
                         const escapedAssess = assessTarget.replace(/\./g, '\\\\.');
                         const assessHost = req.headers.host.replace('exam.', 'assess.');
-                        text = text.replace(new RegExp(`https?://${escapedAssess}`, 'g'), `${req.protocol}://${assessHost}`);
+                        text = text.replace(new RegExp(`https?://${escapedAssess}`, 'g'), `https://${assessHost}`);
 
                         // ── Rewrite infra.assess.testpad.chitkara.edu.in → external proxy ──
                         text = text.replace(/https?:\/\/infra\.assess\.testpad\.chitkara\.edu\.in/g, `${proxyOrigin}/__extproxy__/infra.assess.testpad.chitkara.edu.in`);
