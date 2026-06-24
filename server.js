@@ -1,5 +1,6 @@
 const http = require("node:http");
 const path = require("node:path");
+const zlib = require("node:zlib");
 const express = require("express");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 
@@ -130,6 +131,9 @@ app.use((req, res, next) => {
             proxyReq: (proxyReq, req) => {
                 // Set the correct Host header for the target
                 proxyReq.setHeader('Host', target);
+                // Request uncompressed so we can rewrite HTML/JSON
+                proxyReq.removeHeader('accept-encoding');
+                proxyReq.setHeader('Accept-Encoding', 'identity');
                 // Remove headers that would break the proxy
                 proxyReq.removeHeader('x-forwarded-host');
                 proxyReq.removeHeader('x-forwarded-proto');
@@ -141,24 +145,35 @@ app.use((req, res, next) => {
                 const isHtml = contentType.includes('text/html');
                 const isJson = contentType.includes('application/json');
 
-                // Copy response headers
+                // Copy response headers (skip problematic ones)
+                const skipHeaders = new Set([
+                    'content-security-policy', 'content-security-policy-report-only',
+                    'x-frame-options', 'strict-transport-security',
+                    'content-encoding', 'transfer-encoding', 'content-length'
+                ]);
                 Object.keys(proxyRes.headers).forEach((key) => {
-                    // Skip headers that would break things
-                    if (['content-security-policy', 'content-security-policy-report-only',
-                         'x-frame-options', 'strict-transport-security',
-                         'content-encoding', 'transfer-encoding', 'content-length'].includes(key.toLowerCase())) {
-                        return;
-                    }
+                    if (skipHeaders.has(key.toLowerCase())) return;
                     res.setHeader(key, proxyRes.headers[key]);
                 });
 
                 // Override CORS
                 res.setHeader('Access-Control-Allow-Origin', '*');
 
-                // Collect the response body
+                // Determine if we need to decompress
+                const encoding = (proxyRes.headers['content-encoding'] || '').toLowerCase();
+                let stream = proxyRes;
+                if (encoding === 'gzip') {
+                    stream = proxyRes.pipe(zlib.createGunzip());
+                } else if (encoding === 'br') {
+                    stream = proxyRes.pipe(zlib.createBrotliDecompress());
+                } else if (encoding === 'deflate') {
+                    stream = proxyRes.pipe(zlib.createInflate());
+                }
+
+                // Collect the (decompressed) response body
                 const chunks = [];
-                proxyRes.on('data', (chunk) => chunks.push(chunk));
-                proxyRes.on('end', () => {
+                stream.on('data', (chunk) => chunks.push(chunk));
+                stream.on('end', () => {
                     let body = Buffer.concat(chunks);
 
                     if (isHtml) {
