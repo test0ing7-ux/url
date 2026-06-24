@@ -158,12 +158,13 @@ app.use('/__extproxy__', createProxyMiddleware({
 // ═══════════════════════════════════════════════════════════════
 // DUMMY TEST PAGE — for testing the AI overlay locally
 // ═══════════════════════════════════════════════════════════════
-app.get('/dummy-test', (req, res) => {
-    if (req.query.json === '1') {
+app.get(['/dummy-test', '/test/dummy-test'], (req, res) => {
+    if (req.query.json === '1' || req.query.json === 'true') {
         return res.json({
             endTime: "Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)",
             title: "Dummy Test",
-            status: "published"
+            status: "published",
+            isQuiz: true
         });
     }
 
