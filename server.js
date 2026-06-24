@@ -69,6 +69,70 @@ function extractTarget(hostname) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// SPEED TEST MOCK — Testpad runs speed.cloudflare.com checks.
+// In Electron these fail. Return fake data so the test proceeds.
+// ═══════════════════════════════════════════════════════════════
+app.use('/__speedmock__', (req, res) => {
+    // Return a tiny response that satisfies the speed test
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Server-Timing', 'cfRequestDuration;dur=5');
+    res.end(Buffer.alloc(1024)); // 1KB of zeros
+});
+
+// ═══════════════════════════════════════════════════════════════
+// EXTERNAL PROXY — Proxies requests to external domains that the
+// Testpad app calls directly (e.g. infra.assess.testpad...)
+// URL format: /__extproxy__/<host>/<path>
+// ═══════════════════════════════════════════════════════════════
+app.use('/__extproxy__', async (req, res) => {
+    try {
+        // Extract host from path: /__extproxy__/infra.assess.testpad.chitkara.edu.in/api/foo
+        const parts = req.originalUrl.replace('/__extproxy__/', '').split('/');
+        const extHost = parts.shift();
+        const extPath = '/' + parts.join('/');
+        const extUrl = `https://${extHost}${extPath}`;
+
+        console.log(`[ExtProxy] ${extUrl}`);
+
+        const headers = { ...req.headers };
+        delete headers.host;
+        headers.host = extHost;
+        delete headers['accept-encoding']; // Get uncompressed
+
+        const response = await fetch(extUrl, {
+            method: req.method,
+            headers,
+            redirect: 'follow',
+            body: ['GET', 'HEAD'].includes(req.method) ? undefined : req
+        });
+
+        // Copy response headers
+        for (const [key, value] of response.headers.entries()) {
+            if (!['content-encoding', 'transfer-encoding', 'content-length',
+                   'content-security-policy', 'strict-transport-security'].includes(key.toLowerCase())) {
+                res.setHeader(key, value);
+            }
+        }
+        res.setHeader('Access-Control-Allow-Origin', '*');
+
+        let data = await response.text();
+
+        // Spoof endTime in API responses
+        if (data.includes('"endTime"')) {
+            console.log(`[ExtProxy] Spoofing endTime!`);
+            data = data.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
+        }
+
+        res.status(response.status).send(data);
+    } catch (e) {
+        console.error('[ExtProxy] Error:', e.message);
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.status(502).json({ error: 'External proxy error' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // REVERSE PROXY — Pure server-side proxying. No service workers,
 // no iframes, no bare-mux. Works everywhere including Electron.
 // ═══════════════════════════════════════════════════════════════
@@ -144,6 +208,8 @@ app.use((req, res, next) => {
                 const contentType = proxyRes.headers['content-type'] || '';
                 const isHtml = contentType.includes('text/html');
                 const isJson = contentType.includes('application/json');
+                const isJs = contentType.includes('javascript');
+                const isText = isHtml || isJson || isJs || contentType.includes('text/css');
 
                 // Copy response headers (skip problematic ones)
                 const skipHeaders = new Set([
@@ -176,38 +242,41 @@ app.use((req, res, next) => {
                 stream.on('end', () => {
                     let body = Buffer.concat(chunks);
 
-                    if (isHtml) {
-                        let html = body.toString('utf-8');
-
-                        // Rewrite absolute URLs in HTML so they stay on our proxy
-                        // e.g. https://exam.testpad.chitkarauniversity.edu.in/... 
-                        //    → https://exam.testpad.chitkarauniversity.edu.in.chitkara.dns.navy/...
-                        const escapedTarget = target.replace(/\./g, '\\.');
-                        const urlRegex = new RegExp(`https?://${escapedTarget}`, 'g');
+                    if (isText) {
+                        let text = body.toString('utf-8');
                         const proxyOrigin = `${req.protocol}://${req.headers.host}`;
-                        html = html.replace(urlRegex, proxyOrigin);
 
-                        // Also rewrite the assess.* variant that the app uses
+                        // ── Rewrite same-domain absolute URLs ──
+                        const escapedTarget = target.replace(/\./g, '\\\\.');
+                        text = text.replace(new RegExp(`https?://${escapedTarget}`, 'g'), proxyOrigin);
+
+                        // ── Rewrite assess.* variant ──
                         const assessTarget = target.replace('exam.', 'assess.');
-                        const escapedAssess = assessTarget.replace(/\./g, '\\.');
-                        const assessRegex = new RegExp(`https?://${escapedAssess}`, 'g');
+                        const escapedAssess = assessTarget.replace(/\./g, '\\\\.');
                         const assessHost = req.headers.host.replace('exam.', 'assess.');
-                        html = html.replace(assessRegex, `${req.protocol}://${assessHost}`);
+                        text = text.replace(new RegExp(`https?://${escapedAssess}`, 'g'), `${req.protocol}://${assessHost}`);
 
-                        // Inject performance mock for Testpad speed test
-                        const perfMock = `<script>(function(){try{var fake=[{transferSize:1000,encodedBodySize:1000,decodedBodySize:1000,duration:50,startTime:0,responseEnd:50,name:"https://speed.cloudflare.com/__down?bytes=0",entryType:"resource",initiatorType:"fetch"}];var o=performance.getEntriesByName;performance.getEntriesByName=function(n,t){var r=o.call(performance,n,t);if(r&&r.length)return r;return fake};var p=performance.getEntries;performance.getEntries=function(){var r=p.call(performance);return r.concat(fake)};}catch(e){}})()</script>`;
-                        html = html.replace(/<head([^>]*)>/i, `<head$1>${perfMock}`);
+                        // ── Rewrite infra.assess.testpad.chitkara.edu.in → external proxy ──
+                        text = text.replace(/https?:\/\/infra\.assess\.testpad\.chitkara\.edu\.in/g, `${proxyOrigin}/__extproxy__/infra.assess.testpad.chitkara.edu.in`);
 
-                        res.statusCode = proxyRes.statusCode;
-                        res.end(html);
-                    } else if (isJson) {
-                        let json = body.toString('utf-8');
-                        // Spoof endTime in JSON responses too
-                        if (json.includes('"endTime"')) {
-                            json = json.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
+                        // ── Rewrite speed.cloudflare.com → our mock ──
+                        text = text.replace(/https?:\/\/speed\.cloudflare\.com\/__down/g, `${proxyOrigin}/__speedmock__`);
+                        text = text.replace(/https?:\/\/speed\.cloudflare\.com\/__up/g, `${proxyOrigin}/__speedmock__`);
+                        text = text.replace(/https?:\/\/speed\.cloudflare\.com/g, `${proxyOrigin}/__speedmock__`);
+
+                        // ── Spoof endTime in JSON ──
+                        if (isJson && text.includes('"endTime"')) {
+                            text = text.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
                         }
+
+                        // ── Inject performance mock into HTML ──
+                        if (isHtml) {
+                            const perfMock = `<script>(function(){try{var fake=[{transferSize:1000,encodedBodySize:1000,decodedBodySize:1000,duration:50,startTime:0,responseEnd:50,name:"https://speed.cloudflare.com/__down?bytes=0",entryType:"resource",initiatorType:"fetch"}];var o=performance.getEntriesByName;performance.getEntriesByName=function(n,t){var r=o.call(performance,n,t);if(r&&r.length)return r;return fake};var p=performance.getEntries;performance.getEntries=function(){var r=p.call(performance);return r.concat(fake)};}catch(e){}})()</script>`;
+                            text = text.replace(/<head([^>]*)>/i, `<head$1>${perfMock}`);
+                        }
+
                         res.statusCode = proxyRes.statusCode;
-                        res.end(json);
+                        res.end(text);
                     } else {
                         // Binary/other — pass through as-is
                         res.statusCode = proxyRes.statusCode;
