@@ -111,7 +111,18 @@ app.use('/__extproxy__', async (req, res) => {
         for (const [key, value] of response.headers.entries()) {
             if (!['content-encoding', 'transfer-encoding', 'content-length',
                    'content-security-policy', 'strict-transport-security'].includes(key.toLowerCase())) {
-                res.setHeader(key, value);
+                
+                if (key.toLowerCase() === 'set-cookie') {
+                    // native fetch headers.entries() returns a comma separated string which breaks Date strings.
+                    // Use getSetCookie() instead.
+                    let cookies = response.headers.getSetCookie();
+                    if (cookies && cookies.length > 0) {
+                        cookies = cookies.map(c => c.replace(/Domain=[^;]+;/ig, '').replace(/Domain=[^;]+/ig, ''));
+                        res.setHeader(key, cookies);
+                    }
+                } else {
+                    res.setHeader(key, value);
+                }
             }
         }
         res.setHeader('Access-Control-Allow-Origin', '*');
@@ -220,6 +231,16 @@ app.use((req, res, next) => {
                 ]);
                 Object.keys(proxyRes.headers).forEach((key) => {
                     if (skipHeaders.has(key.toLowerCase())) return;
+                    
+                    // Rewrite Set-Cookie to strip Domain= so the browser accepts it for our proxy
+                    if (key.toLowerCase() === 'set-cookie') {
+                        let cookies = proxyRes.headers[key];
+                        if (!Array.isArray(cookies)) cookies = [cookies];
+                        cookies = cookies.map(c => c.replace(/Domain=[^;]+;/i, '').replace(/Domain=[^;]+/i, ''));
+                        res.setHeader(key, cookies);
+                        return;
+                    }
+
                     res.setHeader(key, proxyRes.headers[key]);
                 });
 
