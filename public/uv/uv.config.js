@@ -12,7 +12,7 @@ self.__uv$config = {
     inject: [
         {
             host: ".*",
-            html: '<script>(function(){try{var o=performance.getEntriesByName;performance.getEntriesByName=function(n,t){var r=o.call(performance,n,t);if(r&&r.length)return r;return[{transferSize:1000,encodedBodySize:1000,decodedBodySize:1000,duration:50,startTime:performance.now()-50,responseEnd:performance.now(),name:n,entryType:t||"resource",initiatorType:"fetch"}]}}catch(e){}})()</script>',
+            html: '<script>(function(){try{var fake=[{transferSize:1000,encodedBodySize:1000,decodedBodySize:1000,duration:50,startTime:0,responseEnd:50,name:"https://speed.cloudflare.com/__down?bytes=0",entryType:"resource",initiatorType:"fetch"}];var o=performance.getEntriesByName;performance.getEntriesByName=function(n,t){var r=o.call(performance,n,t);if(r&&r.length)return r;return fake};var p=performance.getEntries;performance.getEntries=function(){var r=p.call(performance);return r.concat(fake)};}catch(e){}})()</script>',
             injectTo: "head"
         }
     ]
