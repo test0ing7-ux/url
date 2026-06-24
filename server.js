@@ -2455,6 +2455,12 @@ int main() {
                 });
             }
 
+            // Defeat JS-based hardcoded domain checks in HTML
+            const currentProxyHost = req.headers.host || '';
+            if (originalHost && currentProxyHost && originalHost !== currentProxyHost) {
+                html = html.split(originalHost).join(currentProxyHost);
+            }
+
             const currentStealthScript = getStealthScript(proxyDomain);
             const baseTag = !proxyDomain ? `<base href="/${fetchUrl}">` : '';
             
@@ -2483,6 +2489,13 @@ int main() {
             
             // JS rewriting removed — client-side network hooks (fetch/XHR/WebSocket interception
             // in stealth script) handle all runtime URL routing safely without risking syntax corruption
+            
+            // Defeat hardcoded domain checks in JS
+            const currentProxyHost = req.headers.host || '';
+            if (originalHost && currentProxyHost && originalHost !== currentProxyHost) {
+                jsContent = jsContent.split(originalHost).join(currentProxyHost);
+            }
+
             res.setHeader("Content-Type", contentType);
             res.setHeader("X-Proxy-Debug", "true");
             res.setHeader("X-Upstream-Status", response.status);
