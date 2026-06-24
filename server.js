@@ -215,15 +215,19 @@ app.use((req, res, next) => {
                 const skipHeaders = new Set([
                     'content-security-policy', 'content-security-policy-report-only',
                     'x-frame-options', 'strict-transport-security',
-                    'content-encoding', 'transfer-encoding', 'content-length'
+                    'content-encoding', 'transfer-encoding', 'content-length',
+                    'cache-control', 'etag', 'last-modified' // Force disable caching
                 ]);
                 Object.keys(proxyRes.headers).forEach((key) => {
                     if (skipHeaders.has(key.toLowerCase())) return;
                     res.setHeader(key, proxyRes.headers[key]);
                 });
 
-                // Override CORS
+                // Override CORS & Cache
                 res.setHeader('Access-Control-Allow-Origin', '*');
+                res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+                res.setHeader('Pragma', 'no-cache');
+                res.setHeader('Expires', '0');
 
                 // Determine if we need to decompress
                 const encoding = (proxyRes.headers['content-encoding'] || '').toLowerCase();
@@ -258,6 +262,9 @@ app.use((req, res, next) => {
 
                         // ── Rewrite infra.assess.testpad.chitkara.edu.in → external proxy ──
                         text = text.replace(/https?:\/\/infra\.assess\.testpad\.chitkara\.edu\.in/g, `${proxyOrigin}/__extproxy__/infra.assess.testpad.chitkara.edu.in`);
+
+                        // ── Rewrite static.openreplay.com → external proxy ──
+                        text = text.replace(/https?:\/\/static\.openreplay\.com/g, `${proxyOrigin}/__extproxy__/static.openreplay.com`);
 
                         // ── Rewrite speed.cloudflare.com → our mock ──
                         text = text.replace(/https?:\/\/speed\.cloudflare\.com\/__down/g, `${proxyOrigin}/__speedmock__`);
