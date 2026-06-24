@@ -100,9 +100,6 @@ function extractTarget(hostname) {
 
 // ═══════════════════════════════════════════════════════════════
 // CATCH-ALL — auto-detect target from hostname, bootstrap UV
-// exam.testpad.chitkarauniversity.edu.in.chitkara.dns.navy/test/...
-// → target = exam.testpad.chitkarauniversity.edu.in
-// → path = /test/...
 // ═══════════════════════════════════════════════════════════════
 app.use((req, res, next) => {
     // Skip internal UV/bare/static routes
@@ -117,7 +114,6 @@ app.use((req, res, next) => {
     const target = extractTarget(host);
     
     if (!target) {
-        // Root domain or unknown — show landing page
         return res.sendFile(path.join(__dirname, "public", "index.html"));
     }
     
@@ -137,7 +133,15 @@ app.use((req, res, next) => {
                 method: req.method,
                 headers: headers
             }).then(async response => {
-                const data = await response.text();
+                let data = await response.text();
+                
+                // --- EXPIRE DATE SPOOFING ---
+                // If it's the test details JSON, change endTime so it's always live!
+                if (data.includes('"endTime"')) {
+                    console.log(`[API Proxy] Spoofing endTime to 2027 to make test live!`);
+                    data = data.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
+                }
+                
                 res.status(response.status).send(data);
             }).catch(e => {
                 console.error('[API Proxy] Error:', e);
@@ -158,47 +162,24 @@ app.use((req, res, next) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// BOOTSTRAP PAGE — registers SW then redirects to proxied site
+// BOOTSTRAP PAGE — registers SW then natively redirects
 // ═══════════════════════════════════════════════════════════════
 function getBootstrapPage(targetUrl) {
-    // Escape for safe embedding in JS string
     const safeUrl = targetUrl.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, '\\"');
     
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Loading...</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box;overflow:hidden}
-body{background:#0a0a0a;color:#fff;font-family:system-ui,sans-serif;height:100vh;width:100vw}
-#loader{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:10;background:#0a0a0a}
-.spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.1);border-top-color:#6366f1;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
-@keyframes spin{to{transform:rotate(360deg)}}
-p{color:rgba(255,255,255,.6);font-size:14px;text-align:center}
-.error{color:#ef4444;display:none;margin-top:12px;font-size:13px}
-#frame{position:fixed;top:0;left:0;width:100vw;height:100vh;border:none;z-index:1}
-</style>
+<title>Proxy Redirect</title>
 </head>
-<body>
-<div id="loader">
-<div>
-<div class="spinner"></div>
-<p>Connecting...</p>
-<p class="error" id="err"></p>
-</div>
-</div>
+<body style="background:#0a0a0a">
 <script src="/uv/uv.bundle.js"></script>
 <script src="/uv/uv.config.js"></script>
-<script src="/baremux/index.js"></script>
 <script>
 (async function() {
     try {
         if (!navigator.serviceWorker) throw new Error('Service Workers not supported');
-        if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-            throw new Error('HTTPS required');
-        }
         
         const reg = await navigator.serviceWorker.register('/sw.js', { 
             scope: __uv$config.prefix,
@@ -216,22 +197,12 @@ p{color:rgba(255,255,255,.6);font-size:14px;text-align:center}
         }
         await navigator.serviceWorker.ready;
         
-        const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
-        const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
-        await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
-        
-        // Load proxied site in full-screen iframe (keeps this page alive for SharedWorker)
+        // Natively navigate the browser! Looks completely natural!
         const target = '${safeUrl}';
         const url = __uv$config.prefix + __uv$config.encodeUrl(target);
-        const f = document.createElement('iframe');
-        f.id = 'frame';
-        f.src = url;
-        f.setAttribute('allow', 'fullscreen; clipboard-read; clipboard-write; autoplay; camera; microphone');
-        document.body.appendChild(f);
-        f.onload = function() { document.getElementById('loader').style.display = 'none'; };
+        location.href = url;
     } catch(e) {
-        document.getElementById('err').style.display = 'block';
-        document.getElementById('err').textContent = e.message;
+        document.body.innerHTML = '<p style="color:red">' + e.message + '</p>';
         console.error(e);
     }
 })();

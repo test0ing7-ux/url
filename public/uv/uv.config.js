@@ -1,4 +1,4 @@
-// UV Configuration — loaded by both the main page and the service worker
+// UV Configuration v2
 self.__uv$config = {
     prefix: "/s/",
     bare: "/bare/",
