@@ -2459,7 +2459,9 @@ int main() {
             // Defeat JS-based hardcoded domain checks in HTML
             const currentProxyHost = req.headers.host || '';
             if (originalHost && currentProxyHost && originalHost !== currentProxyHost) {
-                html = html.split(originalHost).join(currentProxyHost);
+                // Use a regex with negative lookbehind to avoid replacing the domain inside our newly rewritten proxy paths (e.g. /https://...)
+                const regex = new RegExp('(?<!/https?://)(?<!/https?://www\\.)' + originalHost.replace(/\./g, '\\.'), 'g');
+                html = html.replace(regex, currentProxyHost);
             }
 
             const currentStealthScript = getStealthScript(proxyDomain);
