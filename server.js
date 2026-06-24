@@ -4,7 +4,7 @@ const express = require("express");
 const { createBareServer } = require("@tomphttp/bare-server-node");
 const { uvPath } = require("@titaniumnetwork-dev/ultraviolet");
 const { baremuxPath } = require("@mercuryworkshop/bare-mux/node");
-const bareClientPath = path.join(__dirname, "node_modules", "@mercuryworkshop", "bare-as-module3", "dist");
+const epoxyPath = path.join(__dirname, "node_modules", "@mercuryworkshop", "epoxy-transport", "dist");
 
 // ═══════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -35,8 +35,8 @@ app.use("/uv/", express.static(uvPath));
 // BareMux worker (used by UV's service worker to manage transports)
 app.use("/baremux/", express.static(baremuxPath));
 
-// Bare transport (Standard bare client v3)
-app.use("/bare-client/", express.static(bareClientPath));
+// Epoxy transport (encrypted WebSocket via Wisp)
+app.use("/epoxy/", express.static(epoxyPath));
 
 // ═══════════════════════════════════════════════════════════════
 // SOLVER API — proxies AI requests so they work behind firewalls
@@ -177,8 +177,8 @@ p{color:rgba(255,255,255,.6);font-size:14px;text-align:center}
         await navigator.serviceWorker.ready;
         
         const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
-        const bareServerUrl = location.protocol + '//' + location.host + '/bare/';
-        await conn.setTransport('/bare-client/index.mjs', [bareServerUrl]);
+        const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
+        await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
         
         // Load proxied site in full-screen iframe (keeps this page alive for SharedWorker)
         const target = '${safeUrl}';
