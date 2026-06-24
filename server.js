@@ -2032,7 +2032,8 @@ int main() {
                 proxyHeaders.set(key, value);
             }
         }
-        proxyHeaders.set("Host", originalHost);
+        // Use the actual target hostname for the Host header (fixes API routing on shared load balancers like DigitalOcean)
+        proxyHeaders.set("Host", parsedTarget ? parsedTarget.hostname : originalHost);
         
         // === CHROME BROWSER IMPERSONATION ===
         // Cloudflare checks for these headers. A real browser ALWAYS sends them.
