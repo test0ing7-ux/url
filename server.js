@@ -175,16 +175,20 @@ app.get(['/ai-sandbox-test', '/test/ai-sandbox-test'], (req, res) => {
             <title>Dummy Test</title>
             <style>
                 body { font-family: Arial, sans-serif; padding: 40px; background: #f4f4f9; }
-                .question-box { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 800px; margin: 0 auto 20px auto; }
+                .question-box { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 800px; margin: 0 auto 20px auto; display: none; }
+                .question-box.active { display: block; }
                 .question-text { font-size: 18px; font-weight: bold; margin-bottom: 15px; }
                 .options { list-style-type: none; padding: 0; }
                 .option { background: #eef; padding: 10px; margin-bottom: 10px; border-radius: 4px; cursor: pointer; }
                 .option:hover { background: #ddf; }
                 .code-editor { background: #282a36; color: #f8f8f2; padding: 15px; font-family: monospace; border-radius: 4px; min-height: 150px; white-space: pre; border: none; width: 100%; box-sizing: border-box; }
+                .nav-buttons { text-align: center; margin-top: 20px; }
+                .nav-btn { padding: 10px 20px; background: #6366f1; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin: 0 10px; }
+                .nav-btn:hover { background: #4f46e5; }
             </style>
         </head>
         <body>
-            <div class="question-box">
+            <div id="q1" class="question-box active">
                 <div class="question-text">1. Multiple Choice: What is the output of console.log(typeof null) in JavaScript?</div>
                 <ul class="options">
                     <li class="option">A) "undefined"</li>
@@ -194,7 +198,7 @@ app.get(['/ai-sandbox-test', '/test/ai-sandbox-test'], (req, res) => {
                 </ul>
             </div>
             
-            <div class="question-box">
+            <div id="q2" class="question-box">
                 <div class="question-text">2. Coding Question: Write a function to reverse a string in Python.</div>
                 <p>Complete the function below so that it returns the reversed version of the input string.</p>
                 <textarea class="code-editor" spellcheck="false">def reverse_string(s):
@@ -202,6 +206,26 @@ app.get(['/ai-sandbox-test', '/test/ai-sandbox-test'], (req, res) => {
     pass
 </textarea>
             </div>
+
+            <div class="nav-buttons">
+                <button class="nav-btn" onclick="toggleQuestion()">Next Question</button>
+            </div>
+
+            <script>
+                function toggleQuestion() {
+                    const q1 = document.getElementById('q1');
+                    const q2 = document.getElementById('q2');
+                    if (q1.classList.contains('active')) {
+                        q1.classList.remove('active');
+                        q2.classList.add('active');
+                        document.querySelector('.nav-btn').textContent = 'Previous Question';
+                    } else {
+                        q2.classList.remove('active');
+                        q1.classList.add('active');
+                        document.querySelector('.nav-btn').textContent = 'Next Question';
+                    }
+                }
+            </script>
         </body>
         </html>
     `);
