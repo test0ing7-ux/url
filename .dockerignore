@@ -1,0 +1,10 @@
+node_modules
+.git
+.env
+*.old.js
+test*.html
+test*.js
+testpad_unpacked
+extension
+main.js
+*.md
