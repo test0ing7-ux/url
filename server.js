@@ -1,6 +1,7 @@
 const http = require("node:http");
 const path = require("node:path");
 const zlib = require("node:zlib");
+const fs = require("node:fs");
 const express = require("express");
 const { createProxyMiddleware, responseInterceptor } = require("http-proxy-middleware");
 
