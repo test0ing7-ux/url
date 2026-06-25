@@ -192,10 +192,10 @@ app.get(['/ai-sandbox-test', '/test/ai-sandbox-test'], (req, res) => {
             <div id="q1" class="question-box active">
                 <div class="question-text">1. Multiple Choice: What is the output of console.log(typeof null) in JavaScript?</div>
                 <ul class="options">
-                    <li class="option">A) "undefined"</li>
-                    <li class="option">B) "null"</li>
-                    <li class="option">C) "object"</li>
-                    <li class="option">D) "number"</li>
+                    <li class="option"><label><input type="radio" name="q1" value="A"> A) "undefined"</label></li>
+                    <li class="option"><label><input type="radio" name="q1" value="B"> B) "null"</label></li>
+                    <li class="option"><label><input type="radio" name="q1" value="C"> C) "object"</label></li>
+                    <li class="option"><label><input type="radio" name="q1" value="D"> D) "number"</label></li>
                 </ul>
             </div>
             
