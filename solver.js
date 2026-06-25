@@ -1,4 +1,3 @@
-`
 <script id="proxy-solver">
 (function() {
 
