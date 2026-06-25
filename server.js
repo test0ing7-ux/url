@@ -228,10 +228,8 @@ app.get(['/ai-sandbox-test', '/test/ai-sandbox-test'], (req, res) => {
                 }
             </script>
         </body>
-        <script>
-            // Inject the AI solver script directly for testing
-            ${fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8')}
-        </script>
+        <!-- Inject the AI solver script directly for testing -->
+        ${fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8')}
         </html>
     `);
 });
