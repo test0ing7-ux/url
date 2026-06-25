@@ -30,6 +30,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
 
   async function callAI(question, isWritten) {
     try {
+      console.log("[Solver] Calling AI with prompt length:", question.length);
       let res;
       const payload = {
         model: MODEL,
@@ -48,10 +49,12 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
         });
         if (!res.ok) throw new Error('Proxy API returned ' + res.status);
       } catch(e) {
+        console.error("[Solver] Network Error:", e.message);
         solving = false;
         return null;
       }
       const data = await res.json();
+      console.log("[Solver] API Response:", data);
       if (data.choices && data.choices[0]) {
         let ans = data.choices[0].message.content.trim();
         console.log("[Solver] AI Raw Output:", ans.substring(0, 200));
@@ -67,9 +70,14 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
           ans = ans.substring(0, ans.lastIndexOf(triplebt));
         }
         return ans.trim();
+      } else {
+        console.error("[Solver] AI Error or no choices:", data);
       }
       return null;
-    } catch (e) { return null; }
+    } catch (e) {
+      console.error("[Solver] Exception in callAI:", e);
+      return null;
+    }
   }
 
   function getQuestionType() {
@@ -287,7 +295,11 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
             questionContext = document.body.innerText;
         }
     }
-    if (!questionContext || questionContext.length < 10) return;
+    console.log("[Solver] Extracted question length:", questionContext ? questionContext.length : 0);
+    if (!questionContext || questionContext.length < 10) {
+        console.error("[Solver] Aborting: Question context too short.");
+        return;
+    }
     questionContext = questionContext.substring(0, 4000);
     
     solving = true;
