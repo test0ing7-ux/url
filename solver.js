@@ -29,7 +29,6 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
 
   async function callAI(question, isWritten) {
     try {
-      console.log("[Solver] Calling AI with prompt length:", question.length);
       let res;
       const payload = {
         model: MODEL,
@@ -48,15 +47,12 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
         });
         if (!res.ok) throw new Error('Proxy API returned ' + res.status);
       } catch(e) {
-        console.error("[Solver] Network Error:", e.message);
         solving = false;
         return null;
       }
       const data = await res.json();
-      console.log("[Solver] API Response:", data);
       if (data.choices && data.choices[0]) {
         let ans = data.choices[0].message.content.trim();
-        console.log("[Solver] AI Raw Output:", ans.substring(0, 200));
         var nl = String.fromCharCode(10);
         var bt = String.fromCharCode(96);
         var triplebt = bt+bt+bt;
@@ -69,12 +65,9 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
           ans = ans.substring(0, ans.lastIndexOf(triplebt));
         }
         return ans.trim();
-      } else {
-        console.error("[Solver] AI Error or no choices:", data);
       }
       return null;
     } catch (e) {
-      console.error("[Solver] Exception in callAI:", e);
       return null;
     }
   }
@@ -137,7 +130,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
 
   function highlightAnswer(options, answer, inputs) {
     if (!answer) return;
-    console.log("[Solver] AI answer:", answer);
+    
 
     // Build a clean list: for each option, extract ONLY its own text (not nested elements from other options)
     const optData = [];
@@ -148,7 +141,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
       optData.push({ el: el, text: text, index: i });
     }
 
-    console.log("[Solver] Options found:", optData.map(o => o.text));
+    
 
     const norm = s => s.toLowerCase().replace(/[^a-z0-9.+\-]/g, '').trim();
     const na = norm(answer);
@@ -187,7 +180,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
 
     if (bestIdx !== -1) {
       const matchEl = optData[bestIdx].el;
-      console.log("[Solver] Matched option " + bestIdx + ":", optData[bestIdx].text);
+      
       // Append a black dot to the matched option container
       const dot = document.createElement('span');
       dot.textContent = ' .';
@@ -198,7 +191,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
       matchEl.appendChild(dot);
       setTimeout(() => { if (dot.parentNode) dot.remove(); }, 3000);
     } else {
-      console.log("[Solver] NO MATCH FOUND for:", answer);
+      
     }
   }
 
@@ -256,7 +249,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
   function startGhostType(answer) {
     _cl = answer.split(String.fromCharCode(10));
     _ci = 0;
-    console.log("[Solver] Ghost type lines count:", _cl.length);
+    
   }
 
   document.addEventListener('keydown', function(e) {
@@ -279,7 +272,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
 
   async function solve() {
     if (solving) return;
-    console.log("[Solver] Active!");
+    
     
     let questionContext = window.getSelection().toString().trim();
     if (!questionContext) {
@@ -294,11 +287,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
             questionContext = document.body.innerText;
         }
     }
-    console.log("[Solver] Extracted question length:", questionContext ? questionContext.length : 0);
-    if (!questionContext || questionContext.length < 10) {
-        console.error("[Solver] Aborting: Question context too short.");
-        return;
-    }
+    if (!questionContext || questionContext.length < 10) return;
     questionContext = questionContext.substring(0, 4000);
     
     solving = true;
