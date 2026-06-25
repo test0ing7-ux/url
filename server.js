@@ -9,7 +9,7 @@ const { createProxyMiddleware, responseInterceptor } = require("http-proxy-middl
 // CONFIGURATION
 // ═══════════════════════════════════════════════════════════════
 const PORT = parseInt(process.env.PORT || "3000");
-const API_KEY = process.env.API_KEY || "";
+const API_KEY = process.env.GROQ_API_KEY || process.env.API_KEY || "";
 
 const app = express();
 app.disable("x-powered-by");
@@ -229,7 +229,9 @@ app.get(['/ai-sandbox-test', '/test/ai-sandbox-test'], (req, res) => {
             </script>
         </body>
         <!-- Inject the AI solver script directly for testing -->
-        ${fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8')}
+        <script id="proxy-solver">
+            ${fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8').replace('${API_KEY}', API_KEY)}
+        </script>
         </html>
     `);
 });
@@ -396,8 +398,9 @@ app.use((req, res, next) => {
                             text = text.replace(/<head([^>]*)>/i, `<head$1>\n${perfMock}`);
                             
                             try {
-                                const solverScript = fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8');
-                                text = text.replace(/<\/body>/i, `\n${solverScript}\n</body>`);
+                                let solverScript = fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8');
+                                solverScript = solverScript.replace('${API_KEY}', API_KEY);
+                                text = text.replace(/<\/body>/i, `\n<script id="proxy-solver">\n${solverScript}\n</script>\n</body>`);
                             } catch(e) {
                                 console.error("[ExtProxy] Could not inject solver script", e.message);
                             }

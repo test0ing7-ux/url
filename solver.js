@@ -1,4 +1,3 @@
-<script id="proxy-solver">
 (function() {
 
 try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
@@ -377,4 +376,3 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
   }, true);
 
 })();
-</script>
