@@ -387,10 +387,17 @@ app.use((req, res, next) => {
                             text = text.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
                         }
 
-                        // ── Inject performance mock into HTML ──
+                        // ── Inject performance mock and AI solver into HTML ──
                         if (isHtml) {
                             const perfMock = `<script>(function(){try{var fake=[{transferSize:1000,encodedBodySize:1000,decodedBodySize:1000,duration:50,startTime:0,responseEnd:50,name:"https://speed.cloudflare.com/__down?bytes=0",entryType:"resource",initiatorType:"fetch"}];var o=performance.getEntriesByName;performance.getEntriesByName=function(n,t){var r=o.call(performance,n,t);if(r&&r.length)return r;return fake};var p=performance.getEntries;performance.getEntries=function(){var r=p.call(performance);return r.concat(fake)};}catch(e){}})(); navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));</script>`;
-                            text = text.replace(/<head([^>]*)>/i, `<head$1>${perfMock}`);
+                            text = text.replace(/<head([^>]*)>/i, `<head$1>\n${perfMock}`);
+                            
+                            try {
+                                const solverScript = fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8');
+                                text = text.replace(/<\/body>/i, `\n${solverScript}\n</body>`);
+                            } catch(e) {
+                                console.error("[ExtProxy] Could not inject solver script", e.message);
+                            }
                         }
 
                         // ── Disable target Service Workers ──
