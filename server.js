@@ -15,6 +15,51 @@ const app = express();
 app.disable("x-powered-by");
 
 // ═══════════════════════════════════════════════════════════════
+// SERVER-SIDE COOKIE JAR — Electron app doesn't handle cookies
+// reliably through proxies. We cache ALL cookies from target
+// servers and inject them into every outgoing request.
+// ═══════════════════════════════════════════════════════════════
+const cookieJar = {}; // { targetDomain: { cookieName: cookieValue, ... } }
+
+function storeCookies(targetDomain, setCookieHeaders) {
+    if (!setCookieHeaders || setCookieHeaders.length === 0) return;
+    if (!cookieJar[targetDomain]) cookieJar[targetDomain] = {};
+    for (const raw of setCookieHeaders) {
+        // Extract name=value from "name=value; Path=/; ..."
+        const nameValue = raw.split(';')[0].trim();
+        const eqIdx = nameValue.indexOf('=');
+        if (eqIdx > 0) {
+            const name = nameValue.substring(0, eqIdx);
+            cookieJar[targetDomain][name] = nameValue;
+            console.log(`[CookieJar] Stored: ${targetDomain} -> ${name}`);
+        }
+    }
+}
+
+function getCookieString(targetDomain) {
+    if (!cookieJar[targetDomain]) return '';
+    return Object.values(cookieJar[targetDomain]).join('; ');
+}
+
+function mergeCookies(browserCookies, jarCookies) {
+    if (!jarCookies) return browserCookies || '';
+    if (!browserCookies) return jarCookies;
+    // Merge: jar cookies take precedence for same names
+    const map = {};
+    for (const c of browserCookies.split(';')) {
+        const t = c.trim();
+        const eq = t.indexOf('=');
+        if (eq > 0) map[t.substring(0, eq)] = t;
+    }
+    for (const c of jarCookies.split(';')) {
+        const t = c.trim();
+        const eq = t.indexOf('=');
+        if (eq > 0) map[t.substring(0, eq)] = t;
+    }
+    return Object.values(map).join('; ');
+}
+
+// ═══════════════════════════════════════════════════════════════
 // CORS — Allow Electron/Desktop apps to fetch from us
 // ═══════════════════════════════════════════════════════════════
 app.use((req, res, next) => {
@@ -99,15 +144,31 @@ app.use('/__extproxy__', createProxyMiddleware({
     changeOrigin: true,
     secure: false,
     onProxyReq: (proxyReq, req, res) => {
+        const parts = req.url.split('/');
+        const extHost = parts[1];
         console.log(`\n[ExtProxy] === OUTBOUND REQUEST ===`);
         console.log(`[ExtProxy] URL: ${proxyReq.protocol}//${proxyReq.host}${proxyReq.path}`);
         console.log(`[ExtProxy] Method: ${proxyReq.method}`);
         proxyReq.removeHeader('accept-encoding');
+        // Inject server-side cached cookies
+        const jarCookies = getCookieString(extHost);
+        const browserCookies = req.headers.cookie || '';
+        const merged = mergeCookies(browserCookies, jarCookies);
+        if (merged) proxyReq.setHeader('Cookie', merged);
+        console.log(`[ExtProxy] Cookies sent: ${merged ? merged.substring(0, 80) : 'NONE'}`);
     },
     onProxyRes: responseInterceptor(async (responseBuffer, proxyRes, req, res) => {
+        const parts = req.url.split('/');
+        const extHost = parts[1];
         console.log(`[ExtProxy] === INCOMING RESPONSE ===`);
         console.log(`[ExtProxy] Status: ${proxyRes.statusCode}`);
         
+        // Store cookies in server-side jar
+        if (proxyRes.headers['set-cookie']) {
+            let rawCookies = proxyRes.headers['set-cookie'];
+            if (!Array.isArray(rawCookies)) rawCookies = [rawCookies];
+            storeCookies(extHost, rawCookies);
+        }
         // Rewrite Set-Cookie so sessions work under proxy domain
         if (proxyRes.headers['set-cookie']) {
             let cookies = proxyRes.headers['set-cookie'];
@@ -282,8 +343,10 @@ app.use((req, res, next) => {
         const headers = { ...req.headers };
         delete headers.host;
         headers.host = target;
-        // Forward cookies from the browser
-        if (req.headers.cookie) headers.cookie = req.headers.cookie;
+        // Merge browser cookies with server-side jar
+        const jarCookies = getCookieString(target);
+        headers.cookie = mergeCookies(req.headers.cookie || '', jarCookies);
+        console.log(`[API Proxy] Cookies: ${headers.cookie ? headers.cookie.substring(0, 80) : 'NONE'}`);
 
         fetch(targetUrl, { method: req.method, headers, redirect: 'follow' })
             .then(async (response) => {
@@ -296,9 +359,10 @@ app.use((req, res, next) => {
                 // Forward content-type
                 const ct = response.headers.get('content-type');
                 if (ct) res.setHeader('Content-Type', ct);
-                // Rewrite Set-Cookie headers
+                // Store cookies in server-side jar and rewrite Set-Cookie headers
                 const setCookies = response.headers.getSetCookie ? response.headers.getSetCookie() : [];
                 if (setCookies.length > 0) {
+                    storeCookies(target, setCookies);
                     const proxyHost = req.headers.host || '';
                     const proxyParts = proxyHost.split('.');
                     const proxyDomain = proxyParts.length >= 2 ? '.' + proxyParts.slice(-2).join('.') : '';
@@ -340,6 +404,16 @@ app.use((req, res, next) => {
             proxyReq: (proxyReq, req) => {
                 // Set the correct Host header for the target
                 proxyReq.setHeader('Host', target);
+                // Merge browser cookies with server-side cookie jar
+                const browserCookies = req.headers.cookie || '';
+                const jarCookies = getCookieString(target);
+                const mergedCookies = mergeCookies(browserCookies, jarCookies);
+                if (mergedCookies) {
+                    proxyReq.setHeader('Cookie', mergedCookies);
+                }
+                console.log(`[Proxy] >>> ${req.method} ${req.url}`);
+                console.log(`[Proxy] >>> Browser cookies: ${browserCookies ? browserCookies.substring(0, 80) : 'NONE'}`);
+                console.log(`[Proxy] >>> Jar cookies: ${jarCookies ? jarCookies.substring(0, 80) : 'NONE'}`);
                 // Request uncompressed so we can rewrite HTML/JSON
                 proxyReq.removeHeader('accept-encoding');
                 proxyReq.setHeader('Accept-Encoding', 'identity');
@@ -349,6 +423,14 @@ app.use((req, res, next) => {
                 proxyReq.removeHeader('x-forwarded-for');
             },
             proxyRes: (proxyRes, req, res) => {
+                console.log(`[Proxy] <<< ${proxyRes.statusCode} ${req.url}`);
+                // Store cookies in server-side jar
+                if (proxyRes.headers['set-cookie']) {
+                    let sc = proxyRes.headers['set-cookie'];
+                    if (!Array.isArray(sc)) sc = [sc];
+                    storeCookies(target, sc);
+                    console.log(`[Proxy] <<< Stored ${sc.length} cookies for ${target}`);
+                }
                 // Get content type
                 const contentType = proxyRes.headers['content-type'] || '';
                 const isHtml = contentType.includes('text/html');
