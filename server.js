@@ -172,9 +172,6 @@ app.use('/__extproxy__', createProxyMiddleware({
         if (proxyRes.headers['set-cookie']) {
             let cookies = proxyRes.headers['set-cookie'];
             if (!Array.isArray(cookies)) cookies = [cookies];
-            const proxyHost = req.headers.host || '';
-            const proxyParts = proxyHost.split('.');
-            const proxyDomain = proxyParts.length >= 2 ? '.' + proxyParts.slice(-2).join('.') : '';
             cookies = cookies.map(c => {
                 const hasHttpOnly = /;\s*httponly/i.test(c);
                 let nc = c
@@ -183,10 +180,7 @@ app.use('/__extproxy__', createProxyMiddleware({
                     .replace(/;\s*samesite=[^;]*/gi, '')
                     .replace(/;\s*httponly/gi, '')
                     .replace(/;\s*path=[^;]*/gi, '');
-                nc += '; Path=/';
-                if (proxyDomain) {
-                    nc += '; Domain=' + proxyDomain + '; Secure; SameSite=None';
-                }
+                nc += '; Path=/; Secure; SameSite=None';
                 if (hasHttpOnly) nc += '; HttpOnly';
                 return nc;
             });
@@ -451,10 +445,6 @@ app.use((req, res, next) => {
                     if (key.toLowerCase() === 'set-cookie') {
                         let cookies = proxyRes.headers[key];
                         if (!Array.isArray(cookies)) cookies = [cookies];
-                        // Extract proxy domain for cross-subdomain cookie sharing
-                        const proxyHost = req.headers.host || '';
-                        const proxyParts = proxyHost.split('.');
-                        const proxyDomain = proxyParts.length >= 2 ? '.' + proxyParts.slice(-2).join('.') : '';
                         cookies = cookies.map(c => {
                             const hasHttpOnly = /;\s*httponly/i.test(c);
                             let nc = c
@@ -463,10 +453,7 @@ app.use((req, res, next) => {
                                 .replace(/;\s*samesite=[^;]*/gi, '')
                                 .replace(/;\s*httponly/gi, '')
                                 .replace(/;\s*path=[^;]*/gi, '');
-                            nc += '; Path=/';
-                            if (proxyDomain) {
-                                nc += '; Domain=' + proxyDomain + '; Secure; SameSite=None';
-                            }
+                            nc += '; Path=/; Secure; SameSite=None';
                             if (hasHttpOnly) nc += '; HttpOnly';
                             return nc;
                         });
