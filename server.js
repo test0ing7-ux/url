@@ -108,11 +108,29 @@ app.use('/__extproxy__', createProxyMiddleware({
         console.log(`[ExtProxy] === INCOMING RESPONSE ===`);
         console.log(`[ExtProxy] Status: ${proxyRes.statusCode}`);
         
-        // Strip Domain= from Set-Cookie
+        // Rewrite Set-Cookie so sessions work under proxy domain
         if (proxyRes.headers['set-cookie']) {
             let cookies = proxyRes.headers['set-cookie'];
             if (!Array.isArray(cookies)) cookies = [cookies];
-            res.setHeader('set-cookie', cookies.map(c => c.replace(/Domain=[^;]+;/ig, '').replace(/Domain=[^;]+/ig, '')));
+            const proxyHost = req.headers.host || '';
+            const proxyParts = proxyHost.split('.');
+            const proxyDomain = proxyParts.length >= 2 ? '.' + proxyParts.slice(-2).join('.') : '';
+            cookies = cookies.map(c => {
+                const hasHttpOnly = /;\s*httponly/i.test(c);
+                let nc = c
+                    .replace(/;\s*domain=[^;]*/gi, '')
+                    .replace(/;\s*secure/gi, '')
+                    .replace(/;\s*samesite=[^;]*/gi, '')
+                    .replace(/;\s*httponly/gi, '')
+                    .replace(/;\s*path=[^;]*/gi, '');
+                nc += '; Path=/';
+                if (proxyDomain) {
+                    nc += '; Domain=' + proxyDomain + '; Secure; SameSite=None';
+                }
+                if (hasHttpOnly) nc += '; HttpOnly';
+                return nc;
+            });
+            res.setHeader('set-cookie', cookies);
         }
         res.setHeader('Access-Control-Allow-Origin', '*');
 
@@ -264,6 +282,8 @@ app.use((req, res, next) => {
         const headers = { ...req.headers };
         delete headers.host;
         headers.host = target;
+        // Forward cookies from the browser
+        if (req.headers.cookie) headers.cookie = req.headers.cookie;
 
         fetch(targetUrl, { method: req.method, headers, redirect: 'follow' })
             .then(async (response) => {
@@ -276,6 +296,27 @@ app.use((req, res, next) => {
                 // Forward content-type
                 const ct = response.headers.get('content-type');
                 if (ct) res.setHeader('Content-Type', ct);
+                // Rewrite Set-Cookie headers
+                const setCookies = response.headers.getSetCookie ? response.headers.getSetCookie() : [];
+                if (setCookies.length > 0) {
+                    const proxyHost = req.headers.host || '';
+                    const proxyParts = proxyHost.split('.');
+                    const proxyDomain = proxyParts.length >= 2 ? '.' + proxyParts.slice(-2).join('.') : '';
+                    const rewritten = setCookies.map(c => {
+                        const hasHttpOnly = /;\s*httponly/i.test(c);
+                        let nc = c
+                            .replace(/;\s*domain=[^;]*/gi, '')
+                            .replace(/;\s*secure/gi, '')
+                            .replace(/;\s*samesite=[^;]*/gi, '')
+                            .replace(/;\s*httponly/gi, '')
+                            .replace(/;\s*path=[^;]*/gi, '');
+                        nc += '; Path=/';
+                        if (proxyDomain) nc += '; Domain=' + proxyDomain + '; Secure; SameSite=None';
+                        if (hasHttpOnly) nc += '; HttpOnly';
+                        return nc;
+                    });
+                    res.setHeader('Set-Cookie', rewritten);
+                }
                 res.status(response.status).send(data);
             })
             .catch((e) => {
