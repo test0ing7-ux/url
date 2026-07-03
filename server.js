@@ -325,11 +325,29 @@ app.use((req, res, next) => {
                 Object.keys(proxyRes.headers).forEach((key) => {
                     if (skipHeaders.has(key.toLowerCase())) return;
                     
-                    // Rewrite Set-Cookie to strip Domain= so the browser accepts it for our proxy
+                    // Rewrite Set-Cookie so sessions work under proxy domain
                     if (key.toLowerCase() === 'set-cookie') {
                         let cookies = proxyRes.headers[key];
                         if (!Array.isArray(cookies)) cookies = [cookies];
-                        cookies = cookies.map(c => c.replace(/Domain=[^;]+;/i, '').replace(/Domain=[^;]+/i, ''));
+                        // Extract proxy domain for cross-subdomain cookie sharing
+                        const proxyHost = req.headers.host || '';
+                        const proxyParts = proxyHost.split('.');
+                        const proxyDomain = proxyParts.length >= 2 ? '.' + proxyParts.slice(-2).join('.') : '';
+                        cookies = cookies.map(c => {
+                            const hasHttpOnly = /;\s*httponly/i.test(c);
+                            let nc = c
+                                .replace(/;\s*domain=[^;]*/gi, '')
+                                .replace(/;\s*secure/gi, '')
+                                .replace(/;\s*samesite=[^;]*/gi, '')
+                                .replace(/;\s*httponly/gi, '')
+                                .replace(/;\s*path=[^;]*/gi, '');
+                            nc += '; Path=/';
+                            if (proxyDomain) {
+                                nc += '; Domain=' + proxyDomain + '; Secure; SameSite=None';
+                            }
+                            if (hasHttpOnly) nc += '; HttpOnly';
+                            return nc;
+                        });
                         res.setHeader(key, cookies);
                         return;
                     }

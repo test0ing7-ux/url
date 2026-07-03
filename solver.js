@@ -183,13 +183,14 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
       
       // Append a black dot to the matched option container
       const dot = document.createElement('span');
-      dot.textContent = ' .';
-      dot.style.color = '#000000';
+      dot.textContent = ' \u25CF';
+      dot.style.color = '#22c55e';
       dot.style.fontWeight = 'bold';
-      dot.style.fontSize = '1em';
+      dot.style.fontSize = '1.2em';
+      dot.style.marginLeft = '6px';
       dot.className = '_solver_dot';
       matchEl.appendChild(dot);
-      setTimeout(() => { if (dot.parentNode) dot.remove(); }, 3000);
+      setTimeout(() => { if (dot.parentNode) dot.remove(); }, 15000);
     } else {
       
     }
@@ -247,9 +248,21 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
   }
 
   function startGhostType(answer) {
+    // Clear existing code in the editor before ghost-typing
+    try {
+      var el = document.activeElement;
+      if (el) {
+        var cmEl = el.closest && el.closest('.CodeMirror');
+        if (cmEl && cmEl.CodeMirror) {
+          cmEl.CodeMirror.setValue('');
+        } else if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+          el.value = '';
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+    } catch(e) {}
     _cl = answer.split(String.fromCharCode(10));
     _ci = 0;
-    
   }
 
   document.addEventListener('keydown', function(e) {
@@ -282,7 +295,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
             return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
         });
         if (qEls.length > 0) {
-            questionContext = qEls.map(el => el.innerText).join('\\n\\n');
+            questionContext = qEls.map(el => el.innerText).join('\n\n');
         } else {
             questionContext = document.body.innerText;
         }
@@ -315,7 +328,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     });
     const selectedLang = langSelect ? langSelect.value : "the appropriate language";
     
-    const finalPrompt = questionContext + "\\n\\n[STRICT REQUIREMENT: WRITE THE SOLUTION IN " + selectedLang + ". " + (currentCode ? "USER HAS ALREADY WRITTEN THIS CODE, FINISH IT EXACTLY:\\n" + currentCode : "") + "]";
+    const finalPrompt = questionContext + "\n\n[STRICT REQUIREMENT: WRITE THE SOLUTION IN " + selectedLang + ". " + (currentCode ? "USER HAS ALREADY WRITTEN THIS CODE, FINISH IT EXACTLY:\n" + currentCode : "") + "]";
 
     if (qType.type === "mcq") {
       const answer = await callAI(finalPrompt, false);
