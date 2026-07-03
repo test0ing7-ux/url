@@ -48,12 +48,12 @@ function mergeCookies(browserCookies, jarCookies) {
     for (const c of browserCookies.split(';')) {
         const t = c.trim();
         const eq = t.indexOf('=');
-        if (eq > 0) map[t.substring(0, eq)] = t;
+        if (eq > 0) map[t.substring(0, eq).trim()] = t;
     }
     for (const c of jarCookies.split(';')) {
         const t = c.trim();
         const eq = t.indexOf('=');
-        if (eq > 0) map[t.substring(0, eq)] = t;
+        if (eq > 0) map[t.substring(0, eq).trim()] = t;
     }
     return Object.values(map).join('; ');
 }
@@ -516,8 +516,10 @@ app.use((req, res, next) => {
                         const assessHost = req.headers.host.replace('exam.', 'assess.');
                         text = text.replace(new RegExp(`https?://${escapedAssess}`, 'g'), `https://${assessHost}`);
 
-                        // ── Rewrite infra.assess.testpad.chitkara.edu.in → external proxy ──
-                        text = text.replace(/https?:\/\/infra\.assess\.testpad\.chitkara\.edu\.in/g, `${proxyOrigin}/__extproxy__/infra.assess.testpad.chitkara.edu.in`);
+                        // ── Rewrite infra.assess.* variant → external proxy ──
+                        const infraTarget = target.replace('exam.', 'infra.assess.');
+                        const escapedInfra = infraTarget.replace(/\./g, '\\\\.');
+                        text = text.replace(new RegExp(`https?://${escapedInfra}`, 'g'), `${proxyOrigin}/__extproxy__/${infraTarget}`);
 
                         // ── Rewrite static.openreplay.com → external proxy ──
                         text = text.replace(/https?:\/\/static\.openreplay\.com/g, `${proxyOrigin}/__extproxy__/static.openreplay.com`);
