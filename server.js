@@ -16,29 +16,28 @@ app.disable("x-powered-by");
 
 // ═══════════════════════════════════════════════════════════════
 // SERVER-SIDE COOKIE JAR — Electron app doesn't handle cookies
-// reliably through proxies. We cache ALL cookies from target
-// servers and inject them into every outgoing request.
+// reliably through proxies. We cache ALL cookies and share them 
+// globally across all target subdomains (since this is a single
+// user proxy).
 // ═══════════════════════════════════════════════════════════════
-const cookieJar = {}; // { targetDomain: { cookieName: cookieValue, ... } }
+const globalCookieJar = {}; // { cookieName: cookieValue }
 
 function storeCookies(targetDomain, setCookieHeaders) {
     if (!setCookieHeaders || setCookieHeaders.length === 0) return;
-    if (!cookieJar[targetDomain]) cookieJar[targetDomain] = {};
     for (const raw of setCookieHeaders) {
         // Extract name=value from "name=value; Path=/; ..."
         const nameValue = raw.split(';')[0].trim();
         const eqIdx = nameValue.indexOf('=');
         if (eqIdx > 0) {
             const name = nameValue.substring(0, eqIdx);
-            cookieJar[targetDomain][name] = nameValue;
-            console.log(`[CookieJar] Stored: ${targetDomain} -> ${name}`);
+            globalCookieJar[name] = nameValue;
+            console.log(`[CookieJar] Stored: ${name} (from ${targetDomain})`);
         }
     }
 }
 
 function getCookieString(targetDomain) {
-    if (!cookieJar[targetDomain]) return '';
-    return Object.values(cookieJar[targetDomain]).join('; ');
+    return Object.values(globalCookieJar).join('; ');
 }
 
 function mergeCookies(browserCookies, jarCookies) {
