@@ -10,6 +10,7 @@ const { createProxyMiddleware, responseInterceptor } = require("http-proxy-middl
 // ═══════════════════════════════════════════════════════════════
 const PORT = parseInt(process.env.PORT || "3000");
 const API_KEY = process.env.GROQ_API_KEY || process.env.API_KEY || "";
+const PROXY_DOMAIN = process.env.PROXY_DOMAIN || '';
 
 const app = express();
 app.disable("x-powered-by");
@@ -72,6 +73,25 @@ app.use((req, res, next) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// CADDY ON-DEMAND TLS CHECK — Caddy asks us before issuing a
+// certificate: "should I get a cert for this domain?" We only
+// approve domains that end with our PROXY_DOMAIN.
+// ═══════════════════════════════════════════════════════════════
+app.get('/__caddy_check', (req, res) => {
+    const domain = req.query.domain || '';
+    if (!PROXY_DOMAIN) return res.sendStatus(403);
+    if (domain === PROXY_DOMAIN || domain.endsWith('.' + PROXY_DOMAIN)) {
+        return res.sendStatus(200);
+    }
+    res.sendStatus(403);
+});
+
+// Health check for monitoring
+app.get('/__health', (req, res) => {
+    res.json({ status: 'ok', domain: PROXY_DOMAIN });
+});
+
+// ═══════════════════════════════════════════════════════════════
 // SOLVER API — proxies AI requests so they work behind firewalls
 // ═══════════════════════════════════════════════════════════════
 
@@ -98,16 +118,17 @@ app.post("/__solver_api", express.json({ limit: "5mb" }), async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// PROXY SUFFIX — strip this from hostname to get target domain
+// TARGET EXTRACTION — strip PROXY_DOMAIN suffix from hostname
+// Works with ANY domain you configure via env var.
 // ═══════════════════════════════════════════════════════════════
-const PROXY_SUFFIXES = ['.chitkara.dns.navy', '.up.railway.app'];
-
 function extractTarget(hostname) {
-    for (const suffix of PROXY_SUFFIXES) {
-        if (hostname.endsWith(suffix)) {
-            const target = hostname.slice(0, -suffix.length);
-            if (target) return target;
-        }
+    if (!PROXY_DOMAIN) return null;
+    // Bare domain = landing page
+    if (hostname === PROXY_DOMAIN || hostname === 'www.' + PROXY_DOMAIN) return null;
+    const suffix = '.' + PROXY_DOMAIN;
+    if (hostname.endsWith(suffix)) {
+        const target = hostname.slice(0, -suffix.length);
+        if (target) return target;
     }
     return null;
 }
@@ -356,9 +377,6 @@ app.use((req, res, next) => {
                 const setCookies = response.headers.getSetCookie ? response.headers.getSetCookie() : [];
                 if (setCookies.length > 0) {
                     storeCookies(target, setCookies);
-                    const proxyHost = req.headers.host || '';
-                    const proxyParts = proxyHost.split('.');
-                    const proxyDomain = proxyParts.length >= 2 ? '.' + proxyParts.slice(-2).join('.') : '';
                     const rewritten = setCookies.map(c => {
                         const hasHttpOnly = /;\s*httponly/i.test(c);
                         let nc = c
@@ -367,8 +385,7 @@ app.use((req, res, next) => {
                             .replace(/;\s*samesite=[^;]*/gi, '')
                             .replace(/;\s*httponly/gi, '')
                             .replace(/;\s*path=[^;]*/gi, '');
-                        nc += '; Path=/';
-                        if (proxyDomain) nc += '; Domain=' + proxyDomain + '; Secure; SameSite=None';
+                        nc += '; Path=/; Secure; SameSite=None';
                         if (hasHttpOnly) nc += '; HttpOnly';
                         return nc;
                     });
@@ -564,7 +581,10 @@ app.use((req, res, next) => {
 // HTTP SERVER
 // ═══════════════════════════════════════════════════════════════
 const server = http.createServer(app);
+server.setMaxListeners(0); // Prevent EventEmitter warnings from proxy connections
 
 server.listen(PORT, () => {
     console.log(`Reverse proxy server running on port ${PORT}`);
+    console.log(`PROXY_DOMAIN: ${PROXY_DOMAIN || '(not set)'}`);
+    console.log(`API_KEY: ${API_KEY ? 'present' : 'NOT SET'}`);
 });
