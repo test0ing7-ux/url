@@ -121,7 +121,11 @@ app.post("/__solver_api", express.json({ limit: "5mb" }), async (req, res) => {
 // TARGET EXTRACTION — strip PROXY_DOMAIN suffix from hostname
 // Works with ANY domain you configure via env var.
 // ═══════════════════════════════════════════════════════════════
-function extractTarget(hostname) {
+function extractTarget(req) {
+    if (req.headers['x-target-domain']) {
+        return req.headers['x-target-domain'];
+    }
+    const hostname = req.headers['x-forwarded-host'] || req.headers.host || '';
     if (!PROXY_DOMAIN) return null;
     // Bare domain = landing page
     if (hostname === PROXY_DOMAIN || hostname === 'www.' + PROXY_DOMAIN) return null;
@@ -339,8 +343,8 @@ app.use((req, res, next) => {
         return next();
     }
 
-    const host = req.headers.host || '';
-    const target = extractTarget(host);
+    const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+    const target = extractTarget(req);
 
     if (!target) {
         // Root domain — serve landing page
