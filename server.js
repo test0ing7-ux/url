@@ -751,8 +751,8 @@ app.use((req, res, next) => {
                             })();</script>`;
                             const injected = `${locSpoof} ${perfMock} ${electronMock} ${pmMock} ${socketMock} ${pluginStubs}`.replace(/\n\s*/g, ' ');
                             // Try injecting after <head>, fallback to before <html>, fallback to prepend
-                            if (/<head(>|\\s[^>]*>)/i.test(text)) {
-                                text = text.replace(/<head(>|\\s[^>]*>)/i, `<head$1>\n${injected}`);
+                            if (/<head(>|\s[^>]*>)/i.test(text)) {
+                                text = text.replace(/<head(>|\s[^>]*>)/i, `<head$1>\n${injected}`);
                             } else if (/<html([^>]*)>/i.test(text)) {
                                 text = text.replace(/<html([^>]*)>/i, `<html$1>\n<head>\n${injected}\n</head>`);
                             } else {
