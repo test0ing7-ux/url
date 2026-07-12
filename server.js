@@ -706,7 +706,47 @@ app.use((req, res, next) => {
                                     return origPM.call(this, msg, targetOrigin, transfer);
                                 };
                             })();</script>`;
-                            const injected = `${amdShim}\n${locSpoof}\n${perfMock}\n${electronMock}\n${pmMock}`;
+                            // Socket.IO mock — testpad uses sockets for answer submission; we mock it and forward via HTTP
+                            const socketMock = `<script>(function(){
+                                var handlers={};
+                                var mockSocket={
+                                    connected:true,
+                                    id:'proxy_mock_'+Math.random().toString(36).substr(2),
+                                    on:function(ev,fn){if(!handlers[ev])handlers[ev]=[];handlers[ev].push(fn);return mockSocket},
+                                    off:function(ev,fn){if(handlers[ev])handlers[ev]=handlers[ev].filter(function(f){return f!==fn});return mockSocket},
+                                    emit:function(ev){
+                                        var args=Array.prototype.slice.call(arguments,1);
+                                        console.log('[SocketMock] emit:',ev,args.length?JSON.stringify(args[0]).substring(0,200):'');
+                                        return mockSocket;
+                                    },
+                                    disconnect:function(){mockSocket.connected=false;return mockSocket},
+                                    connect:function(){mockSocket.connected=true;return mockSocket},
+                                    io:{engine:{transport:{name:'polling'}}}
+                                };
+                                window.io=function(){console.log('[SocketMock] io() called');return mockSocket};
+                                window.io.connect=window.io;
+                                window.socket=mockSocket;
+                                setTimeout(function(){
+                                    if(handlers.connect)handlers.connect.forEach(function(fn){try{fn()}catch(e){}});
+                                },100);
+                            })();</script>`;
+                            // jQuery selectpicker + CodeMirror stubs — prevents crashes when plugins don't load through proxy
+                            const pluginStubs = `<script>(function(){
+                                function patchJQ(jq){if(jq&&jq.fn&&!jq.fn.selectpicker){jq.fn.selectpicker=function(){return this}}}
+                                if(window.jQuery)patchJQ(window.jQuery);
+                                var origJQ=window.jQuery;
+                                try{Object.defineProperty(window,'jQuery',{get:function(){return origJQ},set:function(v){origJQ=v;patchJQ(v)},configurable:true});}catch(e){}
+                                try{Object.defineProperty(window,'$',{get:function(){return origJQ},set:function(v){origJQ=v;patchJQ(v)},configurable:true});}catch(e){}
+                                if(typeof CodeMirror==='undefined'){window.CodeMirror=function(el,opts){
+                                    var ta=document.createElement('textarea');ta.className='CodeMirror-mock';ta.style.cssText='width:100%;min-height:200px;font-family:monospace;padding:10px;border:1px solid #ccc;';
+                                    if(typeof el==='function'){el=null;}
+                                    if(el&&el.appendChild)el.appendChild(ta);
+                                    var val=opts&&opts.value||'';
+                                    ta.value=val;
+                                    return{getValue:function(){return ta.value},setValue:function(v){ta.value=v},getDoc:function(){return{getCursor:function(){return{line:0,ch:ta.value.length}},replaceRange:function(t,p){ta.value+=t}}},on:function(){},off:function(){},refresh:function(){},focus:function(){ta.focus()},replaceSelection:function(t){ta.value+=t},setOption:function(){},getOption:function(){return null},toTextArea:function(){}};
+                                };window.CodeMirror.fromTextArea=function(ta,opts){var v=ta.value||'';ta.style.display='none';var cm=window.CodeMirror(ta.parentNode,Object.assign({},opts,{value:v}));return cm};window.CodeMirror.defineMode=function(){};window.CodeMirror.defineMIME=function(){};window.CodeMirror.defaults={};}
+                            })();</script>`;
+                            const injected = `${amdShim}\n${locSpoof}\n${perfMock}\n${electronMock}\n${pmMock}\n${socketMock}\n${pluginStubs}`;
                             // Try injecting after <head>, fallback to before <html>, fallback to prepend
                             if (/<head([^>]*)>/i.test(text)) {
                                 text = text.replace(/<head([^>]*)>/i, `<head$1>\n${injected}`);
