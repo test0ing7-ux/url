@@ -44,11 +44,12 @@ document.getElementById('form').addEventListener('submit', function(e) {
     try {
         var parsed = new URL(url);
         var targetHost = parsed.hostname;
+        var encodedHost = targetHost.split('.').join('-dot-');
         var targetPath = parsed.pathname + parsed.search + parsed.hash;
         // Get our proxy domain suffix (everything after the first dot, or the full hostname if bare)
         var proxyDomain = window.location.hostname;
-        // Build the proxied URL: targetHost.proxyDomain/path
-        var proxiedUrl = window.location.protocol + '//' + targetHost + '.' + proxyDomain + targetPath;
+        // Build the proxied URL: encodedHost.proxyDomain/path
+        var proxiedUrl = window.location.protocol + '//' + encodedHost + '.' + proxyDomain + targetPath;
         window.location.href = proxiedUrl;
     } catch(ex) {
         errEl.textContent = 'Invalid URL — please include https://';

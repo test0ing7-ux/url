@@ -132,7 +132,7 @@ function extractTarget(req) {
     const suffix = '.' + PROXY_DOMAIN;
     if (hostname.endsWith(suffix)) {
         const target = hostname.slice(0, -suffix.length);
-        if (target) return target;
+        if (target) return target.split('-dot-').join('.');
     }
     return null;
 }
