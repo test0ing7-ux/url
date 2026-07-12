@@ -154,6 +154,35 @@ app.use('/__speedmock__', (req, res) => {
 app.all('/__debug', (req, res) => res.json(req.headers));
 
 // ═══════════════════════════════════════════════════════════════
+// CSS.JS INTERCEPT — css.js is a RequireJS plugin that only exists
+// on the exam domain. When the login subdomain requests it, the
+// server returns HTML (404), which crashes with 'define is not
+// defined'. We intercept it here and always proxy from exam domain.
+// ═══════════════════════════════════════════════════════════════
+app.get(/\/css\.js(\?.*)?$/, async (req, res) => {
+    const examDomain = HARDCODED_TARGET;
+    const url = `https://${examDomain}${req.originalUrl}`;
+    console.log(`[css.js intercept] Fetching from: ${url}`);
+    try {
+        const r = await fetch(url, {
+            headers: {
+                'Accept-Encoding': 'identity',
+                'Host': examDomain
+            }
+        });
+        let text = await r.text();
+        // Wrap in polling IIFE so it works even if require.js isn't ready yet
+        text = `(function cssJsInit(){if(typeof define!=='undefined'){${text}}else{setTimeout(cssJsInit,20);}})();`;
+        res.setHeader('Content-Type', 'application/javascript');
+        res.setHeader('Cache-Control', 'no-store');
+        res.send(text);
+    } catch (e) {
+        console.error('[css.js intercept] Error:', e.message);
+        res.status(502).send('// css.js proxy error');
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // EXTERNAL PROXY — Proxies requests to external domains that the
 // Testpad app calls directly (e.g. infra.assess.testpad...)
 // URL format: /__extproxy__/<host>/<path>
@@ -645,7 +674,8 @@ app.use((req, res, next) => {
                             text = text.replace(/"isAppOnly":\s*(true|1|"true")/gi, '"isAppOnly":false');
                         }
 
-                        // ── Fix css.js define crash: poll until RequireJS define is ready ──
+                        // ── Fix css.js define crash: handled by dedicated route above ──
+                        // (kept as fallback for any edge-case)
                         if (isJs && req.url.includes('css.js')) {
                             text = `(function cssJsInit(){if(typeof define!=='undefined'){${text}}else{setTimeout(cssJsInit,20);}})();`;
                         }
@@ -657,7 +687,15 @@ app.use((req, res, next) => {
                             const perfMock = `<script>(function(){try{var fake=[{transferSize:1000,encodedBodySize:1000,decodedBodySize:1000,duration:50,startTime:0,responseEnd:50,name:"https://speed.cloudflare.com/__down?bytes=0",entryType:"resource",initiatorType:"fetch"}];var o=performance.getEntriesByName;performance.getEntriesByName=function(n,t){var r=o.call(performance,n,t);if(r&&r.length)return r;return fake};var p=performance.getEntries;performance.getEntries=function(){var r=p.call(performance);return r.concat(fake)};}catch(e){}})(); navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));</script>`;
                             const electronMock = `<script>window.api = { _sendToMain: function(){}, _receiveFromMain: function(){}, _removeListener: function(){}, _invoke: function(){ return Promise.resolve(); }, updateAppConfig: function(){}, remoteAction: function(){}, _record: function(){}, _stopRecording: function(){}, _setQuizId: function(){}, checkForVirtualAdapter: function(){ return Promise.resolve(false); }, _checkIfVM: function(){ return Promise.resolve(false); } };</script>`;
                             const pmMock = `<script>(function(){var origPM=Window.prototype.postMessage;Window.prototype.postMessage=function(msg,targetOrigin,transfer){if(typeof targetOrigin==='string'&&targetOrigin!=='*'&&targetOrigin!=='/'){targetOrigin='*';}return origPM.call(this,msg,targetOrigin,transfer);};})();</script>`;
-                            text = text.replace(/<head([^>]*)>/i, `<head$1>\n${locSpoof}\n${perfMock}\n${electronMock}\n${pmMock}`);
+                            const injected = `${locSpoof}\n${perfMock}\n${electronMock}\n${pmMock}`;
+                            // Try injecting after <head>, fallback to before <html>, fallback to prepend
+                            if (/<head([^>]*)>/i.test(text)) {
+                                text = text.replace(/<head([^>]*)>/i, `<head$1>\n${injected}`);
+                            } else if (/<html([^>]*)>/i.test(text)) {
+                                text = text.replace(/<html([^>]*)>/i, `<html$1>\n<head>\n${injected}\n</head>`);
+                            } else {
+                                text = `<head>\n${injected}\n</head>\n` + text;
+                            }
                             
                             try {
                                 let solverScript = fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8');
