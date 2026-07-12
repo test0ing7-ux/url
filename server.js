@@ -213,7 +213,7 @@ app.use('/__extproxy__', createProxyMiddleware({
             const extHost = parts[1];
             console.log(`\n[ExtProxy] >>> ${req.method} ${req.url} -> ${extHost}`);
             proxyReq.setHeader('Accept-Encoding', 'gzip, deflate, br');
-            const badHeaders = ['x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for', 'cf-ray', 'cf-connecting-ip', 'cf-visitor', 'cf-ipcountry', 'x-real-ip', 'true-client-ip'];
+            const badHeaders = ['x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for', 'cf-ray', 'cf-connecting-ip', 'cf-visitor', 'cf-ipcountry', 'x-real-ip', 'true-client-ip', 'cf-worker', 'cf-ew-via', 'x-railway-edge', 'x-railway-request-id', 'x-request-start'];
             for (const h of badHeaders) proxyReq.removeHeader(h);
             
             if (proxyReq.getHeader('origin')) proxyReq.setHeader('Origin', `https://${extHost}`);
@@ -460,6 +460,12 @@ app.use((req, res, next) => {
         const headers = { ...req.headers };
         delete headers.host;
         headers.host = target;
+        // Remove Cloudflare/Railway infrastructure headers to avoid Error 1000
+        const badHeaders = ['x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for', 'cf-ray', 'cf-connecting-ip', 'cf-visitor', 'cf-ipcountry', 'x-real-ip', 'true-client-ip', 'cf-worker', 'cf-ew-via', 'x-railway-edge', 'x-railway-request-id', 'x-request-start', 'x-target-domain'];
+        for (const h of badHeaders) delete headers[h];
+        // Set proper origin/referer
+        headers.origin = `https://${target}`;
+        headers.referer = `https://${target}/`;
         // Merge browser cookies with server-side jar
         const jarCookies = getCookieString(target);
         headers.cookie = mergeCookies(req.headers.cookie || '', jarCookies);
@@ -535,7 +541,7 @@ app.use((req, res, next) => {
                     // Request compressed formats we can decode (Cloudflare blocks identity)
                     proxyReq.setHeader('Accept-Encoding', 'gzip, deflate, br');
                     // Remove headers that would break the proxy or trigger Cloudflare blocks
-                    const badHeaders = ['x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for', 'cf-ray', 'cf-connecting-ip', 'cf-visitor', 'cf-ipcountry', 'x-real-ip', 'true-client-ip'];
+                    const badHeaders = ['x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for', 'cf-ray', 'cf-connecting-ip', 'cf-visitor', 'cf-ipcountry', 'x-real-ip', 'true-client-ip', 'cf-worker', 'cf-ew-via', 'x-railway-edge', 'x-railway-request-id', 'x-request-start'];
                     for (const h of badHeaders) {
                         proxyReq.removeHeader(h);
                     }
