@@ -44,7 +44,7 @@ document.getElementById('form').addEventListener('submit', function(e) {
     try {
         var parsed = new URL(url);
         var targetHost = parsed.hostname;
-        var encodedHost = targetHost.split('.').join('-dot-');
+        var encodedHost = targetHost.split('.').join('-');
         var targetPath = parsed.pathname + parsed.search + parsed.hash;
         // Get our proxy domain suffix (everything after the first dot, or the full hostname if bare)
         var proxyDomain = window.location.hostname;

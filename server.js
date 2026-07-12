@@ -131,8 +131,8 @@ function extractTarget(req) {
     if (hostname === PROXY_DOMAIN || hostname === 'www.' + PROXY_DOMAIN) return null;
     const suffix = '.' + PROXY_DOMAIN;
     if (hostname.endsWith(suffix)) {
-        const target = hostname.slice(0, -suffix.length);
-        if (target) return target.split('-dot-').join('.');
+        const encoded = hostname.slice(0, -suffix.length);
+        if (encoded) return encoded.replace(/-/g, '.');
     }
     return null;
 }
@@ -546,10 +546,12 @@ app.use((req, res, next) => {
                             text = text.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
                         }
 
-                        // ── Inject performance mock and AI solver into HTML ──
+                        // ── Inject performance mock, location spoofer, and AI solver into HTML ──
                         if (isHtml) {
+                            // Location spoofer — makes the app think it's on the real domain
+                            const locSpoof = `<script>(function(){var rd='${target}',ro='https://'+rd;try{Object.defineProperty(document,'referrer',{get:function(){return ro+'/'}});}catch(e){}try{Object.defineProperty(document,'domain',{get:function(){return rd},set:function(){}});}catch(e){}var oFetch=window.fetch;window.fetch=function(u,o){if(typeof u==='string'){u=u.replace(location.origin,ro);}return oFetch.call(this,u,o);};var oXHR=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){if(typeof u==='string'){u=u.replace(location.origin,ro);}return oXHR.apply(this,arguments);};})();</script>`;
                             const perfMock = `<script>(function(){try{var fake=[{transferSize:1000,encodedBodySize:1000,decodedBodySize:1000,duration:50,startTime:0,responseEnd:50,name:"https://speed.cloudflare.com/__down?bytes=0",entryType:"resource",initiatorType:"fetch"}];var o=performance.getEntriesByName;performance.getEntriesByName=function(n,t){var r=o.call(performance,n,t);if(r&&r.length)return r;return fake};var p=performance.getEntries;performance.getEntries=function(){var r=p.call(performance);return r.concat(fake)};}catch(e){}})(); navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));</script>`;
-                            text = text.replace(/<head([^>]*)>/i, `<head$1>\n${perfMock}`);
+                            text = text.replace(/<head([^>]*)>/i, `<head$1>\n${locSpoof}\n${perfMock}`);
                             
                             try {
                                 let solverScript = fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8');

@@ -3,21 +3,21 @@ export default {
     const url = new URL(request.url);
     const host = url.hostname;
     
-    // Replace with your Render/Koyeb backend URL
-    const BACKEND_HOST = 'YOUR_APP_NAME.onrender.com';
+    // Your Railway backend URL
+    const BACKEND_HOST = 'url-production-16c8.up.railway.app';
     
     let target = null;
     const PROXY_DOMAIN = 'edvu.in';
     
     // Check if it's a proxy request
     if (host !== PROXY_DOMAIN && host !== 'www.' + PROXY_DOMAIN && host.endsWith('.' + PROXY_DOMAIN)) {
-      target = host.slice(0, -(PROXY_DOMAIN.length + 1));
+      const encoded = host.slice(0, -(PROXY_DOMAIN.length + 1));
+      target = encoded.replace(/-/g, '.'); // Decode hyphens back to dots
     }
     
     // Forward the request to our backend
     const backendUrl = new URL(request.url);
     backendUrl.hostname = BACKEND_HOST;
-    // Cloudflare Workers use https for origin fetch
     backendUrl.protocol = 'https:';
     
     // Create new request
