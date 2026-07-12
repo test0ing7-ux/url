@@ -180,6 +180,11 @@ app.use('/__extproxy__', createProxyMiddleware({
         console.log(`[ExtProxy] URL: ${proxyReq.protocol}//${proxyReq.host}${proxyReq.path}`);
         console.log(`[ExtProxy] Method: ${proxyReq.method}`);
         proxyReq.setHeader('Accept-Encoding', 'gzip, deflate, br');
+        const badHeaders = ['x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for', 'cf-ray', 'cf-connecting-ip', 'cf-visitor', 'cf-ipcountry', 'x-real-ip', 'true-client-ip'];
+        for (const h of badHeaders) proxyReq.removeHeader(h);
+        
+        if (proxyReq.getHeader('origin')) proxyReq.setHeader('Origin', `https://${extHost}`);
+        if (proxyReq.getHeader('referer')) proxyReq.setHeader('Referer', `https://${extHost}/`);
         // Inject server-side cached cookies
         const jarCookies = getCookieString(extHost);
         const browserCookies = req.headers.cookie || '';
@@ -432,10 +437,13 @@ app.use((req, res, next) => {
                     console.log(`[Proxy] >>> Jar cookies: ${jarCookies ? jarCookies.substring(0, 80) : 'NONE'}`);
                     // Request compressed formats we can decode (Cloudflare blocks identity)
                     proxyReq.setHeader('Accept-Encoding', 'gzip, deflate, br');
-                    // Remove headers that would break the proxy
-                    proxyReq.removeHeader('x-forwarded-host');
-                    proxyReq.removeHeader('x-forwarded-proto');
-                    proxyReq.removeHeader('x-forwarded-for');
+                    // Remove headers that would break the proxy or trigger Cloudflare blocks
+                    const badHeaders = ['x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for', 'cf-ray', 'cf-connecting-ip', 'cf-visitor', 'cf-ipcountry', 'x-real-ip', 'true-client-ip'];
+                    for (const h of badHeaders) {
+                        proxyReq.removeHeader(h);
+                    }
+                    if (proxyReq.getHeader('origin')) proxyReq.setHeader('Origin', `https://${target}`);
+                    if (proxyReq.getHeader('referer')) proxyReq.setHeader('Referer', `https://${target}/`);
                 } catch (e) {
                     console.log('[Proxy] Warning: header set on redirect, skipping:', e.message);
                 }

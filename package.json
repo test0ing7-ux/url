@@ -8,7 +8,8 @@
   },
   "dependencies": {
     "express": "^4.21.0",
-    "http-proxy-middleware": "^3.0.7"
+    "http-proxy-middleware": "^3.0.7",
+    "undici": "^7.28.0"
   },
   "engines": {
     "node": ">=18"
