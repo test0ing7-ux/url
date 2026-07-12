@@ -666,7 +666,8 @@ app.use((req, res, next) => {
 
                         // ── Inject performance mock, location spoofer, and AI solver into HTML ──
                         if (isHtml) {
-                            const isFullPage = /^\s*(<!doctype|<html|<head>|<head\s)/i.test(text);
+                            const isNavigation = req.headers['sec-fetch-dest'] === 'document' || req.headers['sec-fetch-dest'] === 'iframe' || (req.headers.accept && req.headers.accept.includes('text/html') && req.headers['sec-fetch-mode'] === 'navigate') || (!req.headers['sec-fetch-dest'] && !req.headers['x-requested-with']);
+                            const isFullPage = isNavigation && /^\s*(<!doctype|<html|<head>|<head\s)/i.test(text);
                             if (isFullPage) {
                                 const proxyHost = getOriginalHost(req);
                             // Location spoofer — comprehensive: intercepts all location redirects and rewrites them through proxy
