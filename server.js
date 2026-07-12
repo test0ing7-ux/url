@@ -163,7 +163,7 @@ app.use('/__speedmock__', (req, res) => {
 app.use('/__extproxy__', createProxyMiddleware({
     router: (req) => {
         const parts = req.url.split('/');
-        const extHost = parts[1]; // req.url is like /infra.assess.../api/... because it's mounted on /__extproxy__
+        const extHost = parts[1];
         return `https://${extHost}`;
     },
     pathRewrite: (path, req) => {
@@ -173,113 +173,140 @@ app.use('/__extproxy__', createProxyMiddleware({
     },
     changeOrigin: true,
     secure: false,
-    onProxyReq: (proxyReq, req, res) => {
-        const parts = req.url.split('/');
-        const extHost = parts[1];
-        console.log(`\n[ExtProxy] === OUTBOUND REQUEST ===`);
-        console.log(`[ExtProxy] URL: ${proxyReq.protocol}//${proxyReq.host}${proxyReq.path}`);
-        console.log(`[ExtProxy] Method: ${proxyReq.method}`);
-        proxyReq.setHeader('Accept-Encoding', 'gzip, deflate, br');
-        const badHeaders = ['x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for', 'cf-ray', 'cf-connecting-ip', 'cf-visitor', 'cf-ipcountry', 'x-real-ip', 'true-client-ip'];
-        for (const h of badHeaders) proxyReq.removeHeader(h);
-        
-        if (proxyReq.getHeader('origin')) proxyReq.setHeader('Origin', `https://${extHost}`);
-        if (proxyReq.getHeader('referer')) proxyReq.setHeader('Referer', `https://${extHost}/`);
-        // Inject server-side cached cookies
-        const jarCookies = getCookieString(extHost);
-        const browserCookies = req.headers.cookie || '';
-        const merged = mergeCookies(browserCookies, jarCookies);
-        if (merged) proxyReq.setHeader('Cookie', merged);
-        console.log(`[ExtProxy] Cookies sent: ${merged ? merged.substring(0, 80) : 'NONE'}`);
-    },
-    onProxyRes: (proxyRes, req, res) => {
-        const parts = req.url.split('/');
-        const extHost = parts[1];
-
-        // ── Strip headers before they are copied to 'res' ──
-        delete proxyRes.headers['content-security-policy'];
-        delete proxyRes.headers['content-security-policy-report-only'];
-        delete proxyRes.headers['x-frame-options'];
-        
-        // responseInterceptor decompresses the body, so we MUST remove content-encoding
-        // otherwise the browser gets decompressed text but thinks it's still gzipped! (Breaks JS)
-        delete proxyRes.headers['content-encoding'];
-        delete proxyRes.headers['content-length'];
-
-        // ── Rewrite Set-Cookie ──
-        if (proxyRes.headers['set-cookie']) {
-            let cookies = proxyRes.headers['set-cookie'];
-            if (!Array.isArray(cookies)) cookies = [cookies];
-            cookies = cookies.map(c => {
-                const hasHttpOnly = /;\s*httponly/i.test(c);
-                let nc = c
-                    .replace(/;\s*domain=[^;]*/gi, '')
-                    .replace(/;\s*secure/gi, '')
-                    .replace(/;\s*samesite=[^;]*/gi, '')
-                    .replace(/;\s*httponly/gi, '')
-                    .replace(/;\s*path=[^;]*/gi, '');
-                nc += '; Path=/; Secure; SameSite=None';
-                if (hasHttpOnly) nc += '; HttpOnly';
-                return nc;
-            });
-            proxyRes.headers['set-cookie'] = cookies;
-        }
-
-        // ── Rewrite Location ──
-        if (proxyRes.headers['location']) {
-            let loc = proxyRes.headers['location'];
-            const proxyOrigin = req.headers['x-forwarded-proto'] ? `${req.headers['x-forwarded-proto']}://${req.headers.host}` : `${req.protocol}://${req.headers.host}`;
-            const target = extractTarget(req);
-            const escapedTarget = target.replace(/\./g, '\\\\.');
-            loc = loc.replace(new RegExp(`https?://${escapedTarget}`, 'gi'), proxyOrigin);
-            loc = loc.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, `${proxyOrigin}/__extproxy__/$1`);
-            proxyRes.headers['location'] = loc;
-        }
-
-        proxyRes.headers['access-control-allow-origin'] = '*';
-
-        return responseInterceptor(async (responseBuffer, interceptedProxyRes, interceptedReq, interceptedRes) => {
-            // Store cookies in server-side jar
-            if (interceptedProxyRes.headers['set-cookie']) {
-                storeCookies(extHost, interceptedProxyRes.headers['set-cookie']);
-            }
-
-            const contentType = interceptedProxyRes.headers['content-type'] || '';
+    selfHandleResponse: true,
+    on: {
+        proxyReq: (proxyReq, req) => {
+            const parts = req.url.split('/');
+            const extHost = parts[1];
+            console.log(`\n[ExtProxy] >>> ${req.method} ${req.url} -> ${extHost}`);
+            proxyReq.setHeader('Accept-Encoding', 'gzip, deflate, br');
+            const badHeaders = ['x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for', 'cf-ray', 'cf-connecting-ip', 'cf-visitor', 'cf-ipcountry', 'x-real-ip', 'true-client-ip'];
+            for (const h of badHeaders) proxyReq.removeHeader(h);
             
-            // Mock session/data if it returns 401
-            if (interceptedReq.url.includes('/quiz-api/session/data') && interceptedProxyRes.statusCode === 401) {
-                interceptedRes.statusCode = 200;
-                interceptedRes.setHeader('Content-Type', 'application/json');
-                return JSON.stringify({
-                    session: {
-                        userId: "mock_user",
-                        ssnid: "mock_ssnid",
-                        role: "student",
-                        email: "student@test.com",
-                        roleId: 1,
-                        displayname: "Mock Student",
-                        tryTest: 1,
-                        enrollmentId: "12345",
-                        isClassAllowed: 1,
-                        allowInteractiveMode: 1,
-                        projectSpace: 1,
-                        testingSpace: 1,
-                        learningSpace: 1,
-                        projectLanguagesAllowed: []
-                    }
-                });
+            if (proxyReq.getHeader('origin')) proxyReq.setHeader('Origin', `https://${extHost}`);
+            if (proxyReq.getHeader('referer')) proxyReq.setHeader('Referer', `https://${extHost}/`);
+            const jarCookies = getCookieString(extHost);
+            const browserCookies = req.headers.cookie || '';
+            const merged = mergeCookies(browserCookies, jarCookies);
+            if (merged) proxyReq.setHeader('Cookie', merged);
+        },
+        proxyRes: (proxyRes, req, res) => {
+            const parts = req.url.split('/');
+            const extHost = parts[1];
+            console.log(`[ExtProxy] <<< ${proxyRes.statusCode} ${req.url}`);
+
+            // Store cookies in server-side jar
+            if (proxyRes.headers['set-cookie']) {
+                let sc = proxyRes.headers['set-cookie'];
+                if (!Array.isArray(sc)) sc = [sc];
+                storeCookies(extHost, sc);
             }
 
-            if (contentType.includes('application/json') || contentType.includes('text/')) {
-                let data = responseBuffer.toString('utf8');
-                if (data.includes('"endTime"')) {
-                    data = data.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
+            const contentType = proxyRes.headers['content-type'] || '';
+            const isHtml = contentType.includes('text/html');
+            const isJson = contentType.includes('application/json');
+            const isJs = contentType.includes('javascript');
+            const isText = isHtml || isJson || isJs || contentType.includes('text/css');
+
+            // ── Copy headers, skip dangerous ones ──
+            const skipHeaders = new Set([
+                'content-security-policy', 'content-security-policy-report-only',
+                'x-frame-options', 'strict-transport-security',
+                'content-encoding', 'transfer-encoding', 'content-length',
+            ]);
+            Object.keys(proxyRes.headers).forEach((key) => {
+                if (skipHeaders.has(key.toLowerCase())) return;
+
+                // Rewrite Location
+                if (key.toLowerCase() === 'location') {
+                    let loc = proxyRes.headers[key];
+                    const proxyOrigin = `https://${req.headers.host}`;
+                    loc = loc.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, `${proxyOrigin}/__extproxy__/$1`);
+                    loc = loc.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkara\.edu\.in)/gi, `${proxyOrigin}/__extproxy__/$1`);
+                    res.setHeader(key, loc);
+                    return;
                 }
-                return data;
+
+                // Rewrite Set-Cookie
+                if (key.toLowerCase() === 'set-cookie') {
+                    let cookies = proxyRes.headers[key];
+                    if (!Array.isArray(cookies)) cookies = [cookies];
+                    cookies = cookies.map(c => {
+                        const hasHttpOnly = /;\s*httponly/i.test(c);
+                        let nc = c
+                            .replace(/;\s*domain=[^;]*/gi, '')
+                            .replace(/;\s*secure/gi, '')
+                            .replace(/;\s*samesite=[^;]*/gi, '')
+                            .replace(/;\s*httponly/gi, '')
+                            .replace(/;\s*path=[^;]*/gi, '');
+                        nc += '; Path=/; Secure; SameSite=None';
+                        if (hasHttpOnly) nc += '; HttpOnly';
+                        return nc;
+                    });
+                    res.setHeader(key, cookies);
+                    return;
+                }
+
+                res.setHeader(key, proxyRes.headers[key]);
+            });
+
+            // Override CORS
+            res.setHeader('Access-Control-Allow-Origin', '*');
+
+            // ── Decompress the response body ──
+            const encoding = (proxyRes.headers['content-encoding'] || '').toLowerCase();
+            let stream = proxyRes;
+            if (encoding === 'gzip') {
+                stream = proxyRes.pipe(zlib.createGunzip());
+            } else if (encoding === 'br') {
+                stream = proxyRes.pipe(zlib.createBrotliDecompress());
+            } else if (encoding === 'deflate') {
+                stream = proxyRes.pipe(zlib.createInflate());
             }
 
-            return responseBuffer;
-        })(proxyRes, req, res);
+            const chunks = [];
+            stream.on('data', (chunk) => chunks.push(chunk));
+            stream.on('end', () => {
+                let body = Buffer.concat(chunks);
+
+                // Mock session/data if it returns 401
+                if (req.url.includes('/quiz-api/session/data') && proxyRes.statusCode === 401) {
+                    res.statusCode = 200;
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify({
+                        session: {
+                            userId: "mock_user", ssnid: "mock_ssnid", role: "student",
+                            email: "student@test.com", roleId: 1, displayname: "Mock Student",
+                            tryTest: 1, enrollmentId: "12345", isClassAllowed: 1,
+                            allowInteractiveMode: 1, projectSpace: 1, testingSpace: 1,
+                            learningSpace: 1, projectLanguagesAllowed: []
+                        }
+                    }));
+                    return;
+                }
+
+                if (isText) {
+                    let text = body.toString('utf-8');
+                    // Spoof endTime
+                    if (text.includes('"endTime"')) {
+                        text = text.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
+                    }
+                    res.statusCode = proxyRes.statusCode;
+                    res.end(text);
+                } else {
+                    res.statusCode = proxyRes.statusCode;
+                    res.end(body);
+                }
+            });
+            stream.on('error', (err) => {
+                console.error('[ExtProxy] Stream error:', err.message);
+                if (!res.headersSent) res.status(502).send('ExtProxy stream error');
+            });
+        },
+        error: (err, req, res) => {
+            console.error('[ExtProxy Error]', err.message);
+            if (!res.headersSent) res.status(502).send('ExtProxy Error');
+        }
     }
 }));
 
