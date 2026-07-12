@@ -562,6 +562,9 @@ app.use((req, res, next) => {
                                 .replace(/;\s*httponly/gi, '')
                                 .replace(/;\s*path=[^;]*/gi, '');
                             nc += '; Path=/; Secure; SameSite=None';
+                            if (PROXY_DOMAIN) {
+                                nc += `; Domain=.${PROXY_DOMAIN}`;
+                            }
                             if (hasHttpOnly) nc += '; HttpOnly';
                             return nc;
                         });
@@ -652,7 +655,7 @@ app.use((req, res, next) => {
                         // ── Fix css.js define crash ──
                         // Sometimes subdomains return 404 HTML for css.js, so we ignore `isJs`
                         if (req.url.includes('css.js')) {
-                            text = `(function cssJsInit(){if(typeof define!=='undefined'){console.log('[Proxy] css.js executing');${text}}else{console.log('[Proxy] css.js waiting for define...');setTimeout(cssJsInit,20);}})();`;
+                            text = `if(typeof define === 'undefined') { window.define = function(factory) { if(typeof factory === 'function') factory(); }; window.define.amd = {}; }\n${text}`;
                         }
 
                         // ── Inject performance mock, location spoofer, and AI solver into HTML ──
