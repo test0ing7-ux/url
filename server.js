@@ -476,11 +476,13 @@ app.use((req, res, next) => {
                 let data = await response.text();
                 // Spoof endTime to 2027 so expired tests work
                 if (data.includes('"endTime"') || data.includes('"isExpired"') || data.includes('"isAppOnly"')) {
-                    console.log(`[API Proxy] Spoofing test expiration details!`);
-                    data = data.replace(/"endTime":"[^"]+"/g, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
-                    data = data.replace(/"endTime":\d+/g, '"endTime":1809239400000');
-                    data = data.replace(/"isExpired":\s*(true|1|"true")/gi, '"isExpired":false');
-                    data = data.replace(/"status":"EXPIRED"/gi, '"status":"LIVE"');
+                    if (data.match(/"isExpired":\s*(true|1|"true")/i) || data.match(/"status":"EXPIRED"/i)) {
+                        console.log(`[API Proxy] Spoofing test expiration details!`);
+                        data = data.replace(/"endTime":"[^"]+"/g, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
+                        data = data.replace(/"endTime":\d+/g, '"endTime":1809239400000');
+                        data = data.replace(/"isExpired":\s*(true|1|"true")/gi, '"isExpired":false');
+                        data = data.replace(/"status":"EXPIRED"/gi, '"status":"LIVE"');
+                    }
                     data = data.replace(/"isAppOnly":\s*(true|1|"true")/gi, '"isAppOnly":false');
                 }
                 // Forward content-type
@@ -672,10 +674,16 @@ app.use((req, res, next) => {
 
                         // ── Spoof expiration details in ALL text responses ──
                         if (isText) {
-                            text = text.replace(/"endTime":"[^"]+"/g, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
-                            text = text.replace(/"endTime":\d+/g, '"endTime":1809239400000');
-                            text = text.replace(/"isExpired":\s*(true|1|"true")/gi, '"isExpired":false');
-                            text = text.replace(/"status":"EXPIRED"/gi, '"status":"LIVE"');
+                            // Only spoof timers if the test is actually expired. 
+                            // Otherwise, live tests will show 8000+ hours remaining!
+                            if (text.match(/"isExpired":\s*(true|1|"true")/i) || text.match(/"status":"EXPIRED"/i)) {
+                                text = text.replace(/"endTime":"[^"]+"/g, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
+                                text = text.replace(/"endTime":\d+/g, '"endTime":1809239400000');
+                                text = text.replace(/"isExpired":\s*(true|1|"true")/gi, '"isExpired":false');
+                                text = text.replace(/"status":"EXPIRED"/gi, '"status":"LIVE"');
+                            }
+                            
+                            // Always spoof the Desktop App requirement so you can use the browser
                             text = text.replace(/"isAppOnly":\s*(true|1|"true")/gi, '"isAppOnly":false');
                         }
 
