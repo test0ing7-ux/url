@@ -124,11 +124,21 @@ app.post("/__solver_api", express.json({ limit: "5mb" }), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 const HARDCODED_TARGET = 'exam.testpad.chitkarauniversity.edu.in';
 
+function getOriginalHost(req) {
+    let host = req.headers['cf-worker'] || req.headers['x-forwarded-host'] || req.headers.host || '';
+    // If the request was routed via a subdomain, Cloudflare worker sets x-target-domain but loses the original host.
+    // We reconstruct it to avoid cross-origin issues in the rewritten HTML.
+    if (req.headers['x-target-domain'] && req.headers['cf-worker']) {
+        host = req.headers['x-target-domain'].replace(/\./g, '-') + '.' + req.headers['cf-worker'];
+    }
+    return host;
+}
+
 function extractTarget(req) {
     if (req.headers['x-target-domain']) {
         return req.headers['x-target-domain'];
     }
-    const hostname = req.headers['cf-worker'] || req.headers['x-forwarded-host'] || req.headers.host || '';
+    const hostname = getOriginalHost(req);
     
     // If PROXY_DOMAIN is set and request uses subdomains, decode them
     if (PROXY_DOMAIN && hostname !== PROXY_DOMAIN && hostname !== 'www.' + PROXY_DOMAIN) {
@@ -222,7 +232,7 @@ app.use('/__extproxy__', createProxyMiddleware({
                 // Rewrite Location
                 if (key.toLowerCase() === 'location') {
                     let loc = proxyRes.headers[key];
-                    const proxyOrigin = `https://${req.headers['cf-worker'] || req.headers['x-forwarded-host'] || req.headers.host}`;
+                    const proxyOrigin = `https://${getOriginalHost(req)}`;
                     // Rewrite absolute testpad URLs
                     loc = loc.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, `${proxyOrigin}/__extproxy__/$1`);
                     loc = loc.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkara\.edu\.in)/gi, `${proxyOrigin}/__extproxy__/$1`);
@@ -416,7 +426,7 @@ app.use((req, res, next) => {
         return next();
     }
 
-    const host = req.headers['cf-worker'] || req.headers['x-forwarded-host'] || req.headers.host || '';
+    const host = getOriginalHost(req);
     const target = extractTarget(req);
 
     // ─── JSON preflight (Testpad app pre-check) ───
@@ -538,7 +548,7 @@ app.use((req, res, next) => {
                     
                     // Rewrite Location headers to keep user in proxy
                     if (key.toLowerCase() === 'location') {
-                        const host = req.headers['cf-worker'] || req.headers['x-forwarded-host'] || req.headers.host;
+                        const host = getOriginalHost(req);
                         const proxyOrigin = req.headers['x-forwarded-proto'] ? `${req.headers['x-forwarded-proto']}://${host}` : `${req.protocol}://${host}`;
                         let loc = proxyRes.headers[key];
                         const escapedTarget = target.replace(/\./g, '\\\\.');
@@ -598,7 +608,7 @@ app.use((req, res, next) => {
                         let text = body.toString('utf-8');
                         // Use https explicitly since the proxy handles SSL termination and req.protocol might be http
                         const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-                        const host = req.headers['cf-worker'] || req.headers['x-forwarded-host'] || req.headers.host;
+                        const host = getOriginalHost(req);
                         const proxyOrigin = `https://${host}`;
 
                         // ── Rewrite same-domain absolute URLs ──
