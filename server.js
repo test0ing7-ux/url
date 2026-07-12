@@ -416,25 +416,29 @@ app.use((req, res, next) => {
         selfHandleResponse: true,
         on: {
             proxyReq: (proxyReq, req) => {
-                // Set the correct Host header for the target
-                proxyReq.setHeader('Host', target);
-                // Merge browser cookies with server-side cookie jar
-                const browserCookies = req.headers.cookie || '';
-                const jarCookies = getCookieString(target);
-                const mergedCookies = mergeCookies(browserCookies, jarCookies);
-                if (mergedCookies) {
-                    proxyReq.setHeader('Cookie', mergedCookies);
+                try {
+                    // Set the correct Host header for the target
+                    proxyReq.setHeader('Host', target);
+                    // Merge browser cookies with server-side cookie jar
+                    const browserCookies = req.headers.cookie || '';
+                    const jarCookies = getCookieString(target);
+                    const mergedCookies = mergeCookies(browserCookies, jarCookies);
+                    if (mergedCookies) {
+                        proxyReq.setHeader('Cookie', mergedCookies);
+                    }
+                    console.log(`[Proxy] >>> ${req.method} ${req.url}`);
+                    console.log(`[Proxy] >>> Browser cookies: ${browserCookies ? browserCookies.substring(0, 80) : 'NONE'}`);
+                    console.log(`[Proxy] >>> Jar cookies: ${jarCookies ? jarCookies.substring(0, 80) : 'NONE'}`);
+                    // Request uncompressed so we can rewrite HTML/JSON
+                    proxyReq.removeHeader('accept-encoding');
+                    proxyReq.setHeader('Accept-Encoding', 'identity');
+                    // Remove headers that would break the proxy
+                    proxyReq.removeHeader('x-forwarded-host');
+                    proxyReq.removeHeader('x-forwarded-proto');
+                    proxyReq.removeHeader('x-forwarded-for');
+                } catch (e) {
+                    console.log('[Proxy] Warning: header set on redirect, skipping:', e.message);
                 }
-                console.log(`[Proxy] >>> ${req.method} ${req.url}`);
-                console.log(`[Proxy] >>> Browser cookies: ${browserCookies ? browserCookies.substring(0, 80) : 'NONE'}`);
-                console.log(`[Proxy] >>> Jar cookies: ${jarCookies ? jarCookies.substring(0, 80) : 'NONE'}`);
-                // Request uncompressed so we can rewrite HTML/JSON
-                proxyReq.removeHeader('accept-encoding');
-                proxyReq.setHeader('Accept-Encoding', 'identity');
-                // Remove headers that would break the proxy
-                proxyReq.removeHeader('x-forwarded-host');
-                proxyReq.removeHeader('x-forwarded-proto');
-                proxyReq.removeHeader('x-forwarded-for');
             },
             proxyRes: (proxyRes, req, res) => {
                 console.log(`[Proxy] <<< ${proxyRes.statusCode} ${req.url}`);
