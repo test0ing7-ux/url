@@ -12,6 +12,15 @@ const PORT = parseInt(process.env.PORT || "3000");
 const API_KEY = process.env.GROQ_API_KEY || process.env.API_KEY || "";
 const PROXY_DOMAIN = process.env.PROXY_DOMAIN || '';
 
+function getProxyUrlForDomain(targetDomain, proxyOrigin) {
+    if (PROXY_DOMAIN) {
+        const sub = targetDomain.replace(/\./g, '-');
+        const scheme = proxyOrigin.split('://')[0] || 'https';
+        return `${scheme}://${sub}.${PROXY_DOMAIN}`;
+    }
+    return `${proxyOrigin}/__extproxy__/${targetDomain}`;
+}
+
 const app = express();
 app.disable("x-powered-by");
 
@@ -209,8 +218,8 @@ app.use('/__extproxy__', createProxyMiddleware({
                     let loc = proxyRes.headers[key];
                     const proxyOrigin = `https://${getOriginalHost(req)}`;
                     // Rewrite absolute testpad URLs
-                    loc = loc.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, `${proxyOrigin}/__extproxy__/$1`);
-                    loc = loc.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkara\.edu\.in)/gi, `${proxyOrigin}/__extproxy__/$1`);
+                    loc = loc.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, (m, p1) => getProxyUrlForDomain(p1, proxyOrigin));
+                    loc = loc.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkara\.edu\.in)/gi, (m, p1) => getProxyUrlForDomain(p1, proxyOrigin));
                     // Rewrite relative redirects (e.g. /login -> /__extproxy__/host/login)
                     if (loc.startsWith('/') && !loc.startsWith('/__extproxy__')) {
                         loc = `/__extproxy__/${extHost}${loc}`;
@@ -534,7 +543,8 @@ app.use((req, res, next) => {
                         let loc = proxyRes.headers[key];
                         const escapedTarget = target.replace(/\./g, '\\\\.');
                         loc = loc.replace(new RegExp(`https?://${escapedTarget}`, 'gi'), proxyOrigin);
-                        loc = loc.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, `${proxyOrigin}/__extproxy__/$1`);
+                        loc = loc.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, (m, p1) => getProxyUrlForDomain(p1, proxyOrigin));
+                        loc = loc.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkara\.edu\.in)/gi, (m, p1) => getProxyUrlForDomain(p1, proxyOrigin));
                         res.setHeader(key, loc);
                         return;
                     }
@@ -605,11 +615,11 @@ app.use((req, res, next) => {
                         // ── Rewrite infra.assess.* variant → external proxy ──
                         const infraTarget = target.replace('exam.', 'infra.assess.');
                         const escapedInfra = infraTarget.replace(/\./g, '\\\\.');
-                        text = text.replace(new RegExp(`https?://${escapedInfra}`, 'g'), `${proxyOrigin}/__extproxy__/${infraTarget}`);
+                        text = text.replace(new RegExp(`https?://${escapedInfra}`, 'g'), getProxyUrlForDomain(infraTarget, proxyOrigin));
 
                         // ── Catch-all for OTHER testpad domains (like login.testpad...) ──
-                        text = text.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, `${proxyOrigin}/__extproxy__/$1`);
-                        text = text.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkara\.edu\.in)/gi, `${proxyOrigin}/__extproxy__/$1`);
+                        text = text.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, (m, p1) => getProxyUrlForDomain(p1, proxyOrigin));
+                        text = text.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkara\.edu\.in)/gi, (m, p1) => getProxyUrlForDomain(p1, proxyOrigin));
 
                         // ── Rewrite static.openreplay.com → external proxy ──
                         text = text.replace(/https?:\/\/static\.openreplay\.com/g, `${proxyOrigin}/__extproxy__/static.openreplay.com`);
