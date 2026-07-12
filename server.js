@@ -602,9 +602,13 @@ app.use((req, res, next) => {
                         const host = getOriginalHost(req);
                         const proxyOrigin = `https://${host}`;
 
-                        // ── Rewrite same-domain absolute URLs ──
-                        const escapedTarget = target.replace(/\./g, '\\\\.');
-                        text = text.replace(new RegExp(`https?://${escapedTarget}`, 'g'), proxyOrigin);
+                        // ── Rewrite absolute testpad URLs ──
+                        text = text.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, (m, p1) => getProxyUrlForDomain(p1, proxyOrigin));
+                        text = text.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkara\.edu\.in)/gi, (m, p1) => getProxyUrlForDomain(p1, proxyOrigin));
+                        
+                        // ── Aggressive postMessage rewrite ──
+                        // Replace postMessage target origins with '*' to bypass strictly matched DOM origin errors
+                        text = text.replace(/postMessage\(([^,]+),\s*['"]https:\/\/[^'"]+['"]/g, "postMessage($1, '*'");
 
                         // ── Rewrite assess.* variant ──
                         const assessTarget = target.replace('exam.', 'assess.');
@@ -648,7 +652,7 @@ app.use((req, res, next) => {
                         // ── Fix css.js define crash ──
                         // Sometimes subdomains return 404 HTML for css.js, so we ignore `isJs`
                         if (req.url.includes('css.js')) {
-                            text = `(function cssJsInit(){if(typeof define!=='undefined'){${text}}else{setTimeout(cssJsInit,20);}})();`;
+                            text = `(function cssJsInit(){if(typeof define!=='undefined'){console.log('[Proxy] css.js executing');${text}}else{console.log('[Proxy] css.js waiting for define...');setTimeout(cssJsInit,20);}})();`;
                         }
 
                         // ── Inject performance mock, location spoofer, and AI solver into HTML ──
