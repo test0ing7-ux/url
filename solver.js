@@ -7,7 +7,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
   console.log("[S] Solver script loaded!");
   console.log("[S] Origin:", window.location.origin);
 
-  const GROQ_KEY = "\${API_KEY}";
+  const GROQ_KEY = "${API_KEY}";
   const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
   const MODEL = "llama-3.3-70b-versatile";
 
