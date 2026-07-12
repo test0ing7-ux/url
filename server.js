@@ -659,16 +659,14 @@ app.use((req, res, next) => {
                         }
 
                         // ── Fix css.js define crash ──
-                        // AMD modules like css.js expect `define` to exist. Shim it in JS responses.
-                        if (req.url.includes('css.js') || (isJs && text.includes('define('))) {
-                            text = `if(typeof define === 'undefined') { window.define = function() { var args = Array.prototype.slice.call(arguments); var factory = args[args.length - 1]; if(typeof factory === 'function') { try { factory(); } catch(e) {} } }; window.define.amd = {}; }\n${text}`;
+                        // css.js throws ReferenceError if define is missing.
+                        if (req.url.includes('css.js')) {
+                            text = `if(typeof define === 'undefined') { window.define = function() {}; window.define.amd = {}; }\n${text}`;
                         }
 
                         // ── Inject performance mock, location spoofer, and AI solver into HTML ──
                         if (isHtml) {
                             const proxyHost = getOriginalHost(req);
-                            // AMD define shim — must come before ANY JS loads to prevent css.js crash
-                            const amdShim = `<script>if(typeof define==='undefined'){window.define=function(){var a=Array.prototype.slice.call(arguments),f=a[a.length-1];if(typeof f==='function'){try{f()}catch(e){}}};window.define.amd={};}</script>`;
                             // Location spoofer — comprehensive: intercepts all location redirects and rewrites them through proxy
                             const locSpoof = `<script>(function(){
                                 var rd='${target}',ro='https://'+rd;
@@ -746,7 +744,7 @@ app.use((req, res, next) => {
                                     return{getValue:function(){return ta.value},setValue:function(v){ta.value=v},getDoc:function(){return{getCursor:function(){return{line:0,ch:ta.value.length}},replaceRange:function(t,p){ta.value+=t}}},on:function(){},off:function(){},refresh:function(){},focus:function(){ta.focus()},replaceSelection:function(t){ta.value+=t},setOption:function(){},getOption:function(){return null},toTextArea:function(){}};
                                 };window.CodeMirror.fromTextArea=function(ta,opts){var v=ta.value||'';ta.style.display='none';var cm=window.CodeMirror(ta.parentNode,Object.assign({},opts,{value:v}));return cm};window.CodeMirror.defineMode=function(){};window.CodeMirror.defineMIME=function(){};window.CodeMirror.defaults={};}
                             })();</script>`;
-                            const injected = `${amdShim}\n${locSpoof}\n${perfMock}\n${electronMock}\n${pmMock}\n${socketMock}\n${pluginStubs}`;
+                            const injected = `${locSpoof}\n${perfMock}\n${electronMock}\n${pmMock}\n${socketMock}\n${pluginStubs}`;
                             // Try injecting after <head>, fallback to before <html>, fallback to prepend
                             if (/<head([^>]*)>/i.test(text)) {
                                 text = text.replace(/<head([^>]*)>/i, `<head$1>\n${injected}`);
