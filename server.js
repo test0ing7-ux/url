@@ -448,12 +448,13 @@ app.use((req, res, next) => {
             .then(async (response) => {
                 let data = await response.text();
                 // Spoof endTime to 2027 so expired tests work
-                if (data.includes('"endTime"') || data.includes('"isExpired"')) {
+                if (data.includes('"endTime"') || data.includes('"isExpired"') || data.includes('"isAppOnly"')) {
                     console.log(`[API Proxy] Spoofing test expiration details!`);
                     data = data.replace(/"endTime":"[^"]+"/g, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
                     data = data.replace(/"endTime":\d+/g, '"endTime":1809239400000');
                     data = data.replace(/"isExpired":\s*true/gi, '"isExpired":false');
                     data = data.replace(/"status":"EXPIRED"/gi, '"status":"LIVE"');
+                    data = data.replace(/"isAppOnly":\s*true/gi, '"isAppOnly":false');
                 }
                 // Forward content-type
                 const ct = response.headers.get('content-type');
@@ -648,6 +649,7 @@ app.use((req, res, next) => {
                             text = text.replace(/"endTime":\d+/g, '"endTime":1809239400000');
                             text = text.replace(/"isExpired":\s*true/gi, '"isExpired":false');
                             text = text.replace(/"status":"EXPIRED"/gi, '"status":"LIVE"');
+                            text = text.replace(/"isAppOnly":\s*true/gi, '"isAppOnly":false');
                         }
 
                         // ── Inject performance mock, location spoofer, and AI solver into HTML ──
