@@ -748,7 +748,7 @@ app.use((req, res, next) => {
                                     return{getValue:function(){return ta.value},setValue:function(v){ta.value=v},getDoc:function(){return{getCursor:function(){return{line:0,ch:ta.value.length}},replaceRange:function(t,p){ta.value+=t}}},on:function(){},off:function(){},refresh:function(){},focus:function(){ta.focus()},replaceSelection:function(t){ta.value+=t},setOption:function(){},getOption:function(){return null},toTextArea:function(){}};
                                 };window.CodeMirror.fromTextArea=function(ta,opts){var v=ta.value||'';ta.style.display='none';var cm=window.CodeMirror(ta.parentNode,Object.assign({},opts,{value:v}));return cm};window.CodeMirror.defineMode=function(){};window.CodeMirror.defineMIME=function(){};window.CodeMirror.defaults={};}
                             })();</script>`;
-                            const injected = `${locSpoof}\n${perfMock}\n${electronMock}\n${pmMock}\n${socketMock}\n${pluginStubs}`;
+                            const injected = `${locSpoof} ${perfMock} ${electronMock} ${pmMock} ${socketMock} ${pluginStubs}`.replace(/\n\s*/g, ' ');
                             // Try injecting after <head>, fallback to before <html>, fallback to prepend
                             if (/<head([^>]*)>/i.test(text)) {
                                 text = text.replace(/<head([^>]*)>/i, `<head$1>\n${injected}`);
