@@ -221,8 +221,13 @@ app.use('/__extproxy__', createProxyMiddleware({
                 if (key.toLowerCase() === 'location') {
                     let loc = proxyRes.headers[key];
                     const proxyOrigin = `https://${req.headers.host}`;
+                    // Rewrite absolute testpad URLs
                     loc = loc.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, `${proxyOrigin}/__extproxy__/$1`);
                     loc = loc.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkara\.edu\.in)/gi, `${proxyOrigin}/__extproxy__/$1`);
+                    // Rewrite relative redirects (e.g. /login -> /__extproxy__/host/login)
+                    if (loc.startsWith('/') && !loc.startsWith('/__extproxy__')) {
+                        loc = `/__extproxy__/${extHost}${loc}`;
+                    }
                     res.setHeader(key, loc);
                     return;
                 }
