@@ -201,8 +201,8 @@ app.use('/__extproxy__', createProxyMiddleware({
             const contentType = proxyRes.headers['content-type'] || '';
             const isHtml = contentType.includes('text/html');
             const isJson = contentType.includes('application/json');
-            const isJs = contentType.includes('javascript');
-            const isText = isHtml || isJson || isJs || contentType.includes('text/css');
+            const isJs = contentType.includes('javascript') || req.url.includes('.js');
+            const isText = isHtml || isJson || isJs || contentType.includes('text/css') || req.url.includes('.css');
 
             // ── Copy headers, skip dangerous ones ──
             const skipHeaders = new Set([
@@ -241,6 +241,9 @@ app.use('/__extproxy__', createProxyMiddleware({
                             .replace(/;\s*httponly/gi, '')
                             .replace(/;\s*path=[^;]*/gi, '');
                         nc += '; Path=/; Secure; SameSite=None';
+                        if (PROXY_DOMAIN) {
+                            nc += `; Domain=.${PROXY_DOMAIN}`;
+                        }
                         if (hasHttpOnly) nc += '; HttpOnly';
                         return nc;
                     });
@@ -463,6 +466,9 @@ app.use((req, res, next) => {
                             .replace(/;\s*httponly/gi, '')
                             .replace(/;\s*path=[^;]*/gi, '');
                         nc += '; Path=/; Secure; SameSite=None';
+                        if (PROXY_DOMAIN) {
+                            nc += `; Domain=.${PROXY_DOMAIN}`;
+                        }
                         if (hasHttpOnly) nc += '; HttpOnly';
                         return nc;
                     });
@@ -523,8 +529,8 @@ app.use((req, res, next) => {
                 const contentType = proxyRes.headers['content-type'] || '';
                 const isHtml = contentType.includes('text/html');
                 const isJson = contentType.includes('application/json');
-                const isJs = contentType.includes('javascript');
-                const isText = isHtml || isJson || isJs || contentType.includes('text/css');
+                const isJs = contentType.includes('javascript') || req.url.includes('.js');
+                const isText = isHtml || isJson || isJs || contentType.includes('text/css') || req.url.includes('.css');
 
                 // Copy response headers (skip problematic ones)
                 const skipHeaders = new Set([
