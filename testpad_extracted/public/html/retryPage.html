@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<style>
+    .loading_page_div {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      width: 100vw;
+      backdrop-filter: blur(5px);
+    }
+    .loading_page_spinner {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%,-50%);
+        border: 1px solid gray;
+        border-top: 1px white;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        0% { 
+            transform: rotate(0deg); 
+        }
+        100% {
+            transform: rotate(360deg); 
+        }
+    }
+    #failedToLoadPage {
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        width: 100vw;
+        height: 100vh;
+        align-items: center;
+        justify-content: center;
+    }
+
+    #failedToLoadPage>h2 {
+        color: #de6834;
+    }
+
+    #failedToLoadPage>p>a {
+        color: #de6834;
+    }
+</style>
+<script>
+    async function retryLoad() {
+        try {
+            await window.api.retryPageReload();
+            const container = document.getElementById("page_loader_container");
+            if (container) {
+                container.style.display = "initial";
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    }
+</script>
+
+<body>
+    <div id="failedToLoadPage">
+        <h2 class="">Failed to load the app.</h2>
+        <p>Please check your internet connection and <a href="#" onclick="retryLoad()">reload</a>.</p>
+        <div id="page_loader_container" class="loading_page_div" style="display: none;" >
+            <div class="loading_page_spinner">
+            </div>
+          </div>
+    </div>
+</body>
+
+</html>

@@ -118,23 +118,29 @@ app.post("/__solver_api", express.json({ limit: "5mb" }), async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// TARGET EXTRACTION — strip PROXY_DOMAIN suffix from hostname
-// Works with ANY domain you configure via env var.
+// TARGET EXTRACTION
+// Hardcoded to testpad for direct domain (edvu.in) access.
+// Also supports subdomain-based routing as fallback.
 // ═══════════════════════════════════════════════════════════════
+const HARDCODED_TARGET = 'exam.testpad.chitkarauniversity.edu.in';
+
 function extractTarget(req) {
     if (req.headers['x-target-domain']) {
         return req.headers['x-target-domain'];
     }
     const hostname = req.headers['x-forwarded-host'] || req.headers.host || '';
-    if (!PROXY_DOMAIN) return null;
-    // Bare domain = landing page
-    if (hostname === PROXY_DOMAIN || hostname === 'www.' + PROXY_DOMAIN) return null;
-    const suffix = '.' + PROXY_DOMAIN;
-    if (hostname.endsWith(suffix)) {
-        const encoded = hostname.slice(0, -suffix.length);
-        if (encoded) return encoded.replace(/-/g, '.');
+    
+    // If PROXY_DOMAIN is set and request uses subdomains, decode them
+    if (PROXY_DOMAIN && hostname !== PROXY_DOMAIN && hostname !== 'www.' + PROXY_DOMAIN) {
+        const suffix = '.' + PROXY_DOMAIN;
+        if (hostname.endsWith(suffix)) {
+            const encoded = hostname.slice(0, -suffix.length);
+            if (encoded) return encoded.replace(/-/g, '.');
+        }
     }
-    return null;
+    
+    // Default: always proxy to testpad
+    return HARDCODED_TARGET;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -345,11 +351,6 @@ app.use((req, res, next) => {
 
     const host = req.headers['x-forwarded-host'] || req.headers.host || '';
     const target = extractTarget(req);
-
-    if (!target) {
-        // Root domain — serve landing page
-        return res.sendFile(path.join(__dirname, "public", "index.html"));
-    }
 
     // ─── JSON preflight (Testpad app pre-check) ───
     // The Testpad app fetches ?json=1 before loading. We intercept
@@ -565,6 +566,12 @@ app.use((req, res, next) => {
                         // ── Disable target Service Workers ──
                         // The testpad app has a __sw.js that breaks CORS on our proxy.
                         text = text.replace(/navigator\.serviceWorker\.register/g, 'Promise.reject("SW Disabled").catch');
+
+                        // ── Fix isChitkara hostname check ──
+                        // The testpad web app checks: "exam.testpad.chitkarauniversity.edu.in" === window.location.hostname
+                        // Force it to true so the app works correctly through the proxy
+                        text = text.replace(/===\s*window\.location\.hostname/g, '=== "exam.testpad.chitkarauniversity.edu.in"');
+                        text = text.replace(/window\.location\.hostname\s*===/g, '"exam.testpad.chitkarauniversity.edu.in" ===');
 
                         res.statusCode = proxyRes.statusCode;
                         res.end(text);
