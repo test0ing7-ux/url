@@ -666,7 +666,9 @@ app.use((req, res, next) => {
 
                         // ── Inject performance mock, location spoofer, and AI solver into HTML ──
                         if (isHtml) {
-                            const proxyHost = getOriginalHost(req);
+                            const isFullPage = /^\s*(<!doctype|<html|<head)/i.test(text);
+                            if (isFullPage) {
+                                const proxyHost = getOriginalHost(req);
                             // Location spoofer — comprehensive: intercepts all location redirects and rewrites them through proxy
                             const locSpoof = `<script>(function(){
                                 var rd='${target}',ro='https://'+rd;
@@ -710,7 +712,12 @@ app.use((req, res, next) => {
                                 var mockSocket={
                                     connected:true,
                                     id:'proxy_mock_'+Math.random().toString(36).substr(2),
-                                    on:function(ev,fn){if(!handlers[ev])handlers[ev]=[];handlers[ev].push(fn);return mockSocket},
+                                    on:function(ev,fn){
+                                        if(!handlers[ev])handlers[ev]=[];
+                                        handlers[ev].push(fn);
+                                        if(ev==='connect'&&mockSocket.connected)setTimeout(fn,10);
+                                        return mockSocket;
+                                    },
                                     off:function(ev,fn){if(handlers[ev])handlers[ev]=handlers[ev].filter(function(f){return f!==fn});return mockSocket},
                                     emit:function(ev){
                                         var args=Array.prototype.slice.call(arguments,1);
@@ -724,9 +731,6 @@ app.use((req, res, next) => {
                                 window.io=function(){console.log('[SocketMock] io() called');return mockSocket};
                                 window.io.connect=window.io;
                                 window.socket=mockSocket;
-                                setTimeout(function(){
-                                    if(handlers.connect)handlers.connect.forEach(function(fn){try{fn()}catch(e){}});
-                                },100);
                             })();</script>`;
                             // jQuery selectpicker + CodeMirror stubs — prevents crashes when plugins don't load through proxy
                             const pluginStubs = `<script>(function(){
@@ -761,6 +765,7 @@ app.use((req, res, next) => {
                             } catch(e) {
                                 console.error("[ExtProxy] Could not inject solver script", e.message);
                             }
+                            } // end isFullPage
                         }
 
                         // ── Disable target Service Workers ──
