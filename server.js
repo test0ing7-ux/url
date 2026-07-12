@@ -674,7 +674,7 @@ app.use((req, res, next) => {
                                 var PD='${PROXY_DOMAIN}';
                                 function rewriteUrl(url) {
                                     if (!url || typeof url !== 'string') return url;
-                                    return url.replace(/https?:\/\/([a-z0-9][a-z0-9.-]*\.testpad\.chitkara[a-z]*\.edu\.in)/gi, function(m, host) {
+                                    return url.replace(new RegExp('https?://([a-z0-9][a-z0-9.-]*\\\\.testpad\\\\.chitkara[a-z]*\\\\.edu\\\\.in)', 'gi'), function(m, host) {
                                         if (PD) return 'https://' + host.split('.').join('-') + '.' + PD;
                                         return proxyOrigin + '/__extproxy__/' + host;
                                     });
