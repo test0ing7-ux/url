@@ -179,7 +179,7 @@ app.use('/__extproxy__', createProxyMiddleware({
         console.log(`\n[ExtProxy] === OUTBOUND REQUEST ===`);
         console.log(`[ExtProxy] URL: ${proxyReq.protocol}//${proxyReq.host}${proxyReq.path}`);
         console.log(`[ExtProxy] Method: ${proxyReq.method}`);
-        proxyReq.removeHeader('accept-encoding');
+        proxyReq.setHeader('Accept-Encoding', 'gzip, deflate, br');
         // Inject server-side cached cookies
         const jarCookies = getCookieString(extHost);
         const browserCookies = req.headers.cookie || '';
@@ -430,9 +430,8 @@ app.use((req, res, next) => {
                     console.log(`[Proxy] >>> ${req.method} ${req.url}`);
                     console.log(`[Proxy] >>> Browser cookies: ${browserCookies ? browserCookies.substring(0, 80) : 'NONE'}`);
                     console.log(`[Proxy] >>> Jar cookies: ${jarCookies ? jarCookies.substring(0, 80) : 'NONE'}`);
-                    // Request uncompressed so we can rewrite HTML/JSON
-                    proxyReq.removeHeader('accept-encoding');
-                    proxyReq.setHeader('Accept-Encoding', 'identity');
+                    // Request compressed formats we can decode (Cloudflare blocks identity)
+                    proxyReq.setHeader('Accept-Encoding', 'gzip, deflate, br');
                     // Remove headers that would break the proxy
                     proxyReq.removeHeader('x-forwarded-host');
                     proxyReq.removeHeader('x-forwarded-proto');
