@@ -174,10 +174,8 @@ app.use('/__extproxy__', createProxyMiddleware({
             
             if (proxyReq.getHeader('origin')) proxyReq.setHeader('Origin', `https://${extHost}`);
             if (proxyReq.getHeader('referer')) proxyReq.setHeader('Referer', `https://${extHost}/`);
-            const jarCookies = getCookieString(extHost);
             const browserCookies = req.headers.cookie || '';
-            const merged = mergeCookies(browserCookies, jarCookies);
-            if (merged) proxyReq.setHeader('Cookie', merged);
+            if (browserCookies) proxyReq.setHeader('Cookie', browserCookies);
         },
         proxyRes: (proxyRes, req, res) => {
             const parts = req.url.split('/');
@@ -188,7 +186,7 @@ app.use('/__extproxy__', createProxyMiddleware({
             if (proxyRes.headers['set-cookie']) {
                 let sc = proxyRes.headers['set-cookie'];
                 if (!Array.isArray(sc)) sc = [sc];
-                storeCookies(extHost, sc);
+                // storeCookies(extHost, sc); // Removed
             }
 
             const contentType = proxyRes.headers['content-type'] || '';
@@ -423,8 +421,8 @@ app.use((req, res, next) => {
         headers.origin = `https://${target}`;
         headers.referer = `https://${target}/`;
         // Merge browser cookies with server-side jar
-        const jarCookies = getCookieString(target);
-        headers.cookie = mergeCookies(req.headers.cookie || '', jarCookies);
+        const browserCookies = req.headers.cookie || '';
+        headers.cookie = browserCookies;
         console.log(`[API Proxy] Cookies: ${headers.cookie ? headers.cookie.substring(0, 80) : 'NONE'}`);
 
         fetch(targetUrl, { method: req.method, headers, redirect: 'follow' })
@@ -444,10 +442,9 @@ app.use((req, res, next) => {
                 // Forward content-type
                 const ct = response.headers.get('content-type');
                 if (ct) res.setHeader('Content-Type', ct);
-                // Store cookies in server-side jar and rewrite Set-Cookie headers
+                // Rewrite Set-Cookie headers
                 const setCookies = response.headers.getSetCookie ? response.headers.getSetCookie() : [];
                 if (setCookies.length > 0) {
-                    storeCookies(target, setCookies);
                     const rewritten = setCookies.map(c => {
                         const hasHttpOnly = /;\s*httponly/i.test(c);
                         let nc = c
@@ -486,16 +483,13 @@ app.use((req, res, next) => {
                 try {
                     // Set the correct Host header for the target
                     proxyReq.setHeader('Host', target);
-                    // Merge browser cookies with server-side cookie jar
+                    // Merge browser cookies
                     const browserCookies = req.headers.cookie || '';
-                    const jarCookies = getCookieString(target);
-                    const mergedCookies = mergeCookies(browserCookies, jarCookies);
-                    if (mergedCookies) {
-                        proxyReq.setHeader('Cookie', mergedCookies);
+                    if (browserCookies) {
+                        proxyReq.setHeader('Cookie', browserCookies);
                     }
                     console.log(`[Proxy] >>> ${req.method} ${req.url}`);
                     console.log(`[Proxy] >>> Browser cookies: ${browserCookies ? browserCookies.substring(0, 80) : 'NONE'}`);
-                    console.log(`[Proxy] >>> Jar cookies: ${jarCookies ? jarCookies.substring(0, 80) : 'NONE'}`);
                     // Request compressed formats we can decode (Cloudflare blocks identity)
                     proxyReq.setHeader('Accept-Encoding', 'gzip, deflate, br');
                     // Remove headers that would break the proxy or trigger Cloudflare blocks
@@ -511,12 +505,10 @@ app.use((req, res, next) => {
             },
             proxyRes: (proxyRes, req, res) => {
                 console.log(`[Proxy] <<< ${proxyRes.statusCode} ${req.url}`);
-                // Store cookies in server-side jar
+                // Cookies
                 if (proxyRes.headers['set-cookie']) {
                     let sc = proxyRes.headers['set-cookie'];
-                    if (!Array.isArray(sc)) sc = [sc];
-                    storeCookies(target, sc);
-                    console.log(`[Proxy] <<< Stored ${sc.length} cookies for ${target}`);
+                    console.log(`[Proxy] <<< Received cookies for ${target}`);
                 }
                 // Get content type
                 const contentType = proxyRes.headers['content-type'] || '';
