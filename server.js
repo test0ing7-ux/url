@@ -16,50 +16,6 @@ const app = express();
 app.disable("x-powered-by");
 
 // ═══════════════════════════════════════════════════════════════
-// SERVER-SIDE COOKIE JAR — Electron app doesn't handle cookies
-// reliably through proxies. We cache ALL cookies and share them 
-// globally across all target subdomains (since this is a single
-// user proxy).
-// ═══════════════════════════════════════════════════════════════
-const globalCookieJar = {}; // { cookieName: cookieValue }
-
-function storeCookies(targetDomain, setCookieHeaders) {
-    if (!setCookieHeaders || setCookieHeaders.length === 0) return;
-    for (const raw of setCookieHeaders) {
-        // Extract name=value from "name=value; Path=/; ..."
-        const nameValue = raw.split(';')[0].trim();
-        const eqIdx = nameValue.indexOf('=');
-        if (eqIdx > 0) {
-            const name = nameValue.substring(0, eqIdx);
-            globalCookieJar[name] = nameValue;
-            console.log(`[CookieJar] Stored: ${name} (from ${targetDomain})`);
-        }
-    }
-}
-
-function getCookieString(targetDomain) {
-    return Object.values(globalCookieJar).join('; ');
-}
-
-function mergeCookies(browserCookies, jarCookies) {
-    if (!jarCookies) return browserCookies || '';
-    if (!browserCookies) return jarCookies;
-    // Merge: jar cookies take precedence for same names
-    const map = {};
-    for (const c of browserCookies.split(';')) {
-        const t = c.trim();
-        const eq = t.indexOf('=');
-        if (eq > 0) map[t.substring(0, eq).trim()] = t;
-    }
-    for (const c of jarCookies.split(';')) {
-        const t = c.trim();
-        const eq = t.indexOf('=');
-        if (eq > 0) map[t.substring(0, eq).trim()] = t;
-    }
-    return Object.values(map).join('; ');
-}
-
-// ═══════════════════════════════════════════════════════════════
 // CORS — Allow Electron/Desktop apps to fetch from us
 // ═══════════════════════════════════════════════════════════════
 app.use((req, res, next) => {
