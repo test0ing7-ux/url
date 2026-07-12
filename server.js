@@ -298,8 +298,8 @@ app.use('/__extproxy__', createProxyMiddleware({
                     // Inject <base> tag so relative paths resolve to __extproxy__ instead of root
                     if (isHtml) {
                         const baseTag = `<base href="/__extproxy__/${extHost}/">`;
-                        if (text.match(/<head([^>]*)>/i)) {
-                            text = text.replace(/<head([^>]*)>/i, `<head$1>\n${baseTag}`);
+                        if (text.match(/<head(>|\\s[^>]*>)/i)) {
+                            text = text.replace(/<head(>|\\s[^>]*>)/i, `<head$1>\n${baseTag}`);
                         } else {
                             text = `${baseTag}\n${text}`;
                         }
@@ -666,7 +666,7 @@ app.use((req, res, next) => {
 
                         // ── Inject performance mock, location spoofer, and AI solver into HTML ──
                         if (isHtml) {
-                            const isFullPage = /^\s*(<!doctype|<html|<head)/i.test(text);
+                            const isFullPage = /^\s*(<!doctype|<html|<head>|<head\s)/i.test(text);
                             if (isFullPage) {
                                 const proxyHost = getOriginalHost(req);
                             // Location spoofer — comprehensive: intercepts all location redirects and rewrites them through proxy
@@ -750,8 +750,8 @@ app.use((req, res, next) => {
                             })();</script>`;
                             const injected = `${locSpoof} ${perfMock} ${electronMock} ${pmMock} ${socketMock} ${pluginStubs}`.replace(/\n\s*/g, ' ');
                             // Try injecting after <head>, fallback to before <html>, fallback to prepend
-                            if (/<head([^>]*)>/i.test(text)) {
-                                text = text.replace(/<head([^>]*)>/i, `<head$1>\n${injected}`);
+                            if (/<head(>|\\s[^>]*>)/i.test(text)) {
+                                text = text.replace(/<head(>|\\s[^>]*>)/i, `<head$1>\n${injected}`);
                             } else if (/<html([^>]*)>/i.test(text)) {
                                 text = text.replace(/<html([^>]*)>/i, `<html$1>\n<head>\n${injected}\n</head>`);
                             } else {
