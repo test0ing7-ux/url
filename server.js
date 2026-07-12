@@ -157,6 +157,27 @@ function extractTarget(req) {
 // SPEED TEST MOCK — Testpad runs speed.cloudflare.com checks.
 // In Electron these fail. Return fake data so the test proceeds.
 // ═══════════════════════════════════════════════════════════════
+// MOCK TEST ENVIRONMENT
+// ═══════════════════════════════════════════════════════════════
+app.get('/mock-test', (req, res) => {
+    const fs = require('fs');
+    const path = require('path');
+    let html = fs.readFileSync(path.join(__dirname, 'mock-test.html'), 'utf8');
+    
+    // Inject solver script
+    try {
+        let solverScript = fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8');
+        solverScript = solverScript.replace('${API_KEY}', API_KEY);
+        html = html.replace(/<\/body>/i, `\n<script id="proxy-solver">\n${solverScript}\n</script>\n</body>`);
+    } catch(e) {
+        console.error("Could not inject solver script into mock test", e.message);
+    }
+    
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+});
+
+// ═══════════════════════════════════════════════════════════════
 app.use('/__speedmock__', (req, res) => {
     // Return a tiny response that satisfies the speed test
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -452,9 +473,9 @@ app.use((req, res, next) => {
                     console.log(`[API Proxy] Spoofing test expiration details!`);
                     data = data.replace(/"endTime":"[^"]+"/g, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
                     data = data.replace(/"endTime":\d+/g, '"endTime":1809239400000');
-                    data = data.replace(/"isExpired":\s*true/gi, '"isExpired":false');
+                    data = data.replace(/"isExpired":\s*(true|1|"true")/gi, '"isExpired":false');
                     data = data.replace(/"status":"EXPIRED"/gi, '"status":"LIVE"');
-                    data = data.replace(/"isAppOnly":\s*true/gi, '"isAppOnly":false');
+                    data = data.replace(/"isAppOnly":\s*(true|1|"true")/gi, '"isAppOnly":false');
                 }
                 // Forward content-type
                 const ct = response.headers.get('content-type');
@@ -643,13 +664,13 @@ app.use((req, res, next) => {
                         text = text.replace(/https?:\/\/speed\.cloudflare\.com\/__up/g, `${proxyOrigin}/__speedmock__`);
                         text = text.replace(/https?:\/\/speed\.cloudflare\.com/g, `${proxyOrigin}/__speedmock__`);
 
-                        // ── Spoof expiration details in JSON ──
-                        if (isJson) {
+                        // ── Spoof expiration details in ALL text responses ──
+                        if (isText) {
                             text = text.replace(/"endTime":"[^"]+"/g, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
                             text = text.replace(/"endTime":\d+/g, '"endTime":1809239400000');
-                            text = text.replace(/"isExpired":\s*true/gi, '"isExpired":false');
+                            text = text.replace(/"isExpired":\s*(true|1|"true")/gi, '"isExpired":false');
                             text = text.replace(/"status":"EXPIRED"/gi, '"status":"LIVE"');
-                            text = text.replace(/"isAppOnly":\s*true/gi, '"isAppOnly":false');
+                            text = text.replace(/"isAppOnly":\s*(true|1|"true")/gi, '"isAppOnly":false');
                         }
 
                         // ── Inject performance mock, location spoofer, and AI solver into HTML ──
