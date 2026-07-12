@@ -684,7 +684,8 @@ app.use((req, res, next) => {
                             // Location spoofer — makes the app think it's on the real domain
                             const locSpoof = `<script>(function(){var rd='${target}',ro='https://'+rd;try{Object.defineProperty(document,'referrer',{get:function(){return ro+'/'}});}catch(e){}try{Object.defineProperty(document,'domain',{get:function(){return rd},set:function(){}});}catch(e){}})();</script>`;
                             const perfMock = `<script>(function(){try{var fake=[{transferSize:1000,encodedBodySize:1000,decodedBodySize:1000,duration:50,startTime:0,responseEnd:50,name:"https://speed.cloudflare.com/__down?bytes=0",entryType:"resource",initiatorType:"fetch"}];var o=performance.getEntriesByName;performance.getEntriesByName=function(n,t){var r=o.call(performance,n,t);if(r&&r.length)return r;return fake};var p=performance.getEntries;performance.getEntries=function(){var r=p.call(performance);return r.concat(fake)};}catch(e){}})(); navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));</script>`;
-                            text = text.replace(/<head([^>]*)>/i, `<head$1>\n${locSpoof}\n${perfMock}`);
+                            const electronMock = `<script>window.api = { _sendToMain: function(){}, _receiveFromMain: function(){}, _removeListener: function(){} };</script>`;
+                            text = text.replace(/<head([^>]*)>/i, `<head$1>\n${locSpoof}\n${perfMock}\n${electronMock}`);
                             
                             try {
                                 let solverScript = fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8');
