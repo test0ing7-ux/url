@@ -155,6 +155,8 @@ app.use('/__speedmock__', (req, res) => {
     res.end(Buffer.alloc(1024)); // 1KB of zeros
 });
 
+app.all('/__debug', (req, res) => res.json(req.headers));
+
 // ═══════════════════════════════════════════════════════════════
 // EXTERNAL PROXY — Proxies requests to external domains that the
 // Testpad app calls directly (e.g. infra.assess.testpad...)
