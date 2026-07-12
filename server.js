@@ -223,6 +223,19 @@ app.use('/__extproxy__', createProxyMiddleware({
             res.setHeader('set-cookie', cookies);
         }
         res.setHeader('Access-Control-Allow-Origin', '*');
+        res.removeHeader('content-security-policy');
+        res.removeHeader('content-security-policy-report-only');
+        res.removeHeader('x-frame-options');
+
+        if (proxyRes.headers['location']) {
+            let loc = proxyRes.headers['location'];
+            const proxyOrigin = req.headers['x-forwarded-proto'] ? `${req.headers['x-forwarded-proto']}://${req.headers.host}` : `${req.protocol}://${req.headers.host}`;
+            const target = extractTarget(req);
+            const escapedTarget = target.replace(/\./g, '\\\\.');
+            loc = loc.replace(new RegExp(`https?://${escapedTarget}`, 'gi'), proxyOrigin);
+            loc = loc.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, `${proxyOrigin}/__extproxy__/$1`);
+            res.setHeader('location', loc);
+        }
 
         const contentType = proxyRes.headers['content-type'] || '';
         
@@ -474,6 +487,17 @@ app.use((req, res, next) => {
                 Object.keys(proxyRes.headers).forEach((key) => {
                     if (skipHeaders.has(key.toLowerCase())) return;
                     
+                    // Rewrite Location headers to keep user in proxy
+                    if (key.toLowerCase() === 'location') {
+                        let loc = proxyRes.headers[key];
+                        const proxyOrigin = req.headers['x-forwarded-proto'] ? `${req.headers['x-forwarded-proto']}://${req.headers.host}` : `${req.protocol}://${req.headers.host}`;
+                        const escapedTarget = target.replace(/\./g, '\\\\.');
+                        loc = loc.replace(new RegExp(`https?://${escapedTarget}`, 'gi'), proxyOrigin);
+                        loc = loc.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, `${proxyOrigin}/__extproxy__/$1`);
+                        res.setHeader(key, loc);
+                        return;
+                    }
+
                     // Rewrite Set-Cookie so sessions work under proxy domain
                     if (key.toLowerCase() === 'set-cookie') {
                         let cookies = proxyRes.headers[key];
@@ -540,6 +564,10 @@ app.use((req, res, next) => {
                         const infraTarget = target.replace('exam.', 'infra.assess.');
                         const escapedInfra = infraTarget.replace(/\./g, '\\\\.');
                         text = text.replace(new RegExp(`https?://${escapedInfra}`, 'g'), `${proxyOrigin}/__extproxy__/${infraTarget}`);
+
+                        // ── Catch-all for OTHER testpad domains (like login.testpad...) ──
+                        text = text.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, `${proxyOrigin}/__extproxy__/$1`);
+                        text = text.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkara\.edu\.in)/gi, `${proxyOrigin}/__extproxy__/$1`);
 
                         // ── Rewrite static.openreplay.com → external proxy ──
                         text = text.replace(/https?:\/\/static\.openreplay\.com/g, `${proxyOrigin}/__extproxy__/static.openreplay.com`);
