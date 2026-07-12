@@ -657,10 +657,9 @@ app.use((req, res, next) => {
                         text = text.replace(/navigator\.serviceWorker\.register/g, 'Promise.reject("SW Disabled").catch');
 
                         // ── Fix isChitkara hostname check ──
-                        // The testpad web app checks: "exam.testpad.chitkarauniversity.edu.in" === window.location.hostname
-                        // Force it to true so the app works correctly through the proxy
-                        text = text.replace(/===\s*window\.location\.hostname/g, '=== "exam.testpad.chitkarauniversity.edu.in"');
-                        text = text.replace(/window\.location\.hostname\s*===/g, '"exam.testpad.chitkarauniversity.edu.in" ===');
+                        // Force it to match the target domain so the app works correctly through the proxy
+                        text = text.replace(/===\s*window\.location\.hostname/g, `=== "${target}"`);
+                        text = text.replace(/window\.location\.hostname\s*===/g, `"${target}" ===`);
 
                         res.statusCode = proxyRes.statusCode;
                         res.end(text);
