@@ -632,6 +632,7 @@ app.use((req, res, next) => {
 
                         // ── Rewrite static.openreplay.com → external proxy ──
                         text = text.replace(/https?:\/\/static\.openreplay\.com/g, `${proxyOrigin}/__extproxy__/static.openreplay.com`);
+                        text = text.replace(/https?:\/\/api\.openreplay\.com/g, `${proxyOrigin}/__extproxy__/api.openreplay.com`);
 
                         // ── Rewrite speed.cloudflare.com → our mock ──
                         text = text.replace(/https?:\/\/speed\.cloudflare\.com\/__down/g, `${proxyOrigin}/__speedmock__`);
