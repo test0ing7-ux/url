@@ -491,7 +491,7 @@ app.use((req, res, next) => {
         target: proxyTarget,
         changeOrigin: true,
         secure: true,
-        followRedirects: true,
+        followRedirects: false,
         selfHandleResponse: true,
         on: {
             proxyReq: (proxyReq, req) => {
@@ -659,15 +659,66 @@ app.use((req, res, next) => {
                         }
 
                         // ── Fix css.js define crash ──
-                        // Sometimes subdomains return 404 HTML for css.js, so we ignore `isJs`
-                        if (req.url.includes('css.js')) {
-                            text = `if(typeof define === 'undefined') { window.define = function(factory) { if(typeof factory === 'function') factory(); }; window.define.amd = {}; }\n${text}`;
+                        // AMD modules like css.js expect `define` to exist. Shim it in JS responses.
+                        if (req.url.includes('css.js') || (isJs && text.includes('define('))) {
+                            text = `if(typeof define === 'undefined') { window.define = function() { var args = Array.prototype.slice.call(arguments); var factory = args[args.length - 1]; if(typeof factory === 'function') { try { factory(); } catch(e) {} } }; window.define.amd = {}; }\n${text}`;
                         }
 
                         // ── Inject performance mock, location spoofer, and AI solver into HTML ──
                         if (isHtml) {
-                            // Location spoofer — makes the app think it's on the real domain
-                            const locSpoof = `<script>(function(){var rd='${target}',ro='https://'+rd;try{Object.defineProperty(document,'referrer',{get:function(){return ro+'/'}});}catch(e){}try{Object.defineProperty(document,'domain',{get:function(){return rd},set:function(){}});}catch(e){}})();</script>`;
+                            const proxyHost = getOriginalHost(req);
+                            // AMD define shim — must come before ANY JS loads to prevent css.js crash
+                            const amdShim = `<script>if(typeof define==='undefined'){window.define=function(){var a=Array.prototype.slice.call(arguments),f=a[a.length-1];if(typeof f==='function'){try{f()}catch(e){}}};window.define.amd={};}</script>`;
+                            // Location spoofer — comprehensive: intercepts all location redirects and rewrites them through proxy
+                            const locSpoof = `<script>(function(){
+                                var rd='${target}',ro='https://'+rd;
+                                var proxyOrigin=window.location.origin;
+                                var PROXY_DOMAIN='${PROXY_DOMAIN}';
+                                // Helper: rewrite a URL from real domain to proxy domain
+                                function rewriteUrl(url) {
+                                    if (!url || typeof url !== 'string') return url;
+                                    // Rewrite absolute testpad URLs to proxy subdomains
+                                    url = url.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, function(m, host) {
+                                        if (PROXY_DOMAIN) {
+                                            var sub = host.replace(/\\./g, '-');
+                                            return 'https://' + sub + '.' + PROXY_DOMAIN;
+                                        }
+                                        return proxyOrigin + '/__extproxy__/' + host;
+                                    });
+                                    url = url.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkara\.edu\.in)/gi, function(m, host) {
+                                        if (PROXY_DOMAIN) {
+                                            var sub = host.replace(/\\./g, '-');
+                                            return 'https://' + sub + '.' + PROXY_DOMAIN;
+                                        }
+                                        return proxyOrigin + '/__extproxy__/' + host;
+                                    });
+                                    return url;
+                                }
+                                // Spoof document.referrer and document.domain
+                                try{Object.defineProperty(document,'referrer',{get:function(){return ro+'/'}});}catch(e){}
+                                try{Object.defineProperty(document,'domain',{get:function(){return rd},set:function(){}});}catch(e){}
+                                // Intercept window.location assignments to prevent redirect loops
+                                var origAssign = window.location.assign;
+                                var origReplace = window.location.replace;
+                                if (origAssign) window.location.assign = function(url) { return origAssign.call(window.location, rewriteUrl(url)); };
+                                if (origReplace) window.location.replace = function(url) { return origReplace.call(window.location, rewriteUrl(url)); };
+                                // Intercept window.open to rewrite URLs
+                                var origOpen = window.open;
+                                window.open = function(url, name, features) { return origOpen.call(window, rewriteUrl(url), name, features); };
+                                // Intercept XMLHttpRequest.open to rewrite URLs
+                                var origXHROpen = XMLHttpRequest.prototype.open;
+                                XMLHttpRequest.prototype.open = function(method, url) {
+                                    arguments[1] = rewriteUrl(url);
+                                    return origXHROpen.apply(this, arguments);
+                                };
+                                // Intercept fetch to rewrite URLs
+                                var origFetch = window.fetch;
+                                window.fetch = function(input, init) {
+                                    if (typeof input === 'string') input = rewriteUrl(input);
+                                    else if (input && input.url) { try { input = new Request(rewriteUrl(input.url), input); } catch(e) {} }
+                                    return origFetch.call(window, input, init);
+                                };
+                            })();</script>`;
                             const perfMock = `<script>(function(){try{var fake=[{transferSize:1000,encodedBodySize:1000,decodedBodySize:1000,duration:50,startTime:0,responseEnd:50,name:"https://speed.cloudflare.com/__down?bytes=0",entryType:"resource",initiatorType:"fetch"}];var o=performance.getEntriesByName;performance.getEntriesByName=function(n,t){var r=o.call(performance,n,t);if(r&&r.length)return r;return fake};var p=performance.getEntries;performance.getEntries=function(){var r=p.call(performance);return r.concat(fake)};}catch(e){}})(); navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));</script>`;
                             const electronMock = `<script>window.api = { _sendToMain: function(){}, _receiveFromMain: function(){}, _removeListener: function(){}, _invoke: function(){ return Promise.resolve(); }, updateAppConfig: function(){}, remoteAction: function(){}, _record: function(){}, _stopRecording: function(){}, _setQuizId: function(){}, checkForVirtualAdapter: function(){ return Promise.resolve(false); }, _checkIfVM: function(){ return Promise.resolve(false); } };</script>`;
                             // Super robust postMessage mock that overrides targetOrigin safely
@@ -682,7 +733,7 @@ app.use((req, res, next) => {
                                     return origPM.call(this, msg, targetOrigin, transfer);
                                 };
                             })();</script>`;
-                            const injected = `${locSpoof}\n${perfMock}\n${electronMock}\n${pmMock}`;
+                            const injected = `${amdShim}\n${locSpoof}\n${perfMock}\n${electronMock}\n${pmMock}`;
                             // Try injecting after <head>, fallback to before <html>, fallback to prepend
                             if (/<head([^>]*)>/i.test(text)) {
                                 text = text.replace(/<head([^>]*)>/i, `<head$1>\n${injected}`);
@@ -709,6 +760,21 @@ app.use((req, res, next) => {
                         // Force it to match the target domain so the app works correctly through the proxy
                         text = text.replace(/===\s*window\.location\.hostname/g, `=== "${target}"`);
                         text = text.replace(/window\.location\.hostname\s*===/g, `"${target}" ===`);
+
+                        // ── Rewrite JS-level window.location.href = "https://real-domain/..." assignments ──
+                        // Catch hardcoded redirect URLs in JavaScript that would break out of the proxy
+                        text = text.replace(/window\.location\.href\s*=\s*['"]https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)([^'"]*)['"/g, (m, host, path) => {
+                            const proxyOrigin = `https://${getOriginalHost(req)}`;
+                            return `window.location.href="${getProxyUrlForDomain(host, proxyOrigin)}${path}"`;
+                        });
+                        text = text.replace(/window\.location\.replace\s*\(\s*['"]https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)([^'"]*)['"]\s*\)/g, (m, host, path) => {
+                            const proxyOrigin = `https://${getOriginalHost(req)}`;
+                            return `window.location.replace("${getProxyUrlForDomain(host, proxyOrigin)}${path}")`;
+                        });
+                        text = text.replace(/window\.location\s*=\s*['"]https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)([^'"]*)['"/g, (m, host, path) => {
+                            const proxyOrigin = `https://${getOriginalHost(req)}`;
+                            return `window.location="${getProxyUrlForDomain(host, proxyOrigin)}${path}"`;
+                        });
 
                         res.statusCode = proxyRes.statusCode;
                         res.end(text);
