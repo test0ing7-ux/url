@@ -645,13 +645,19 @@ app.use((req, res, next) => {
                             text = text.replace(/"isAppOnly":\s*(true|1|"true")/gi, '"isAppOnly":false');
                         }
 
+                        // ── Fix css.js define crash ──
+                        if (isJs && req.url.includes('css.js')) {
+                            text = `if (typeof define !== 'undefined') {\n${text}\n}`;
+                        }
+
                         // ── Inject performance mock, location spoofer, and AI solver into HTML ──
                         if (isHtml) {
                             // Location spoofer — makes the app think it's on the real domain
                             const locSpoof = `<script>(function(){var rd='${target}',ro='https://'+rd;try{Object.defineProperty(document,'referrer',{get:function(){return ro+'/'}});}catch(e){}try{Object.defineProperty(document,'domain',{get:function(){return rd},set:function(){}});}catch(e){}})();</script>`;
                             const perfMock = `<script>(function(){try{var fake=[{transferSize:1000,encodedBodySize:1000,decodedBodySize:1000,duration:50,startTime:0,responseEnd:50,name:"https://speed.cloudflare.com/__down?bytes=0",entryType:"resource",initiatorType:"fetch"}];var o=performance.getEntriesByName;performance.getEntriesByName=function(n,t){var r=o.call(performance,n,t);if(r&&r.length)return r;return fake};var p=performance.getEntries;performance.getEntries=function(){var r=p.call(performance);return r.concat(fake)};}catch(e){}})(); navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));</script>`;
                             const electronMock = `<script>window.api = { _sendToMain: function(){}, _receiveFromMain: function(){}, _removeListener: function(){}, _invoke: function(){ return Promise.resolve(); }, updateAppConfig: function(){}, remoteAction: function(){}, _record: function(){}, _stopRecording: function(){}, _setQuizId: function(){}, checkForVirtualAdapter: function(){ return Promise.resolve(false); }, _checkIfVM: function(){ return Promise.resolve(false); } };</script>`;
-                            text = text.replace(/<head([^>]*)>/i, `<head$1>\n${locSpoof}\n${perfMock}\n${electronMock}`);
+                            const pmMock = `<script>(function(){const origPM = Window.prototype.postMessage; Window.prototype.postMessage = function(msg, target, transfer) { if (typeof target === 'string' && target.startsWith('http')) { target = '*'; } return origPM.call(this, msg, target, transfer); };})();</script>`;
+                            text = text.replace(/<head([^>]*)>/i, `<head$1>\n${locSpoof}\n${perfMock}\n${electronMock}\n${pmMock}`);
                             
                             try {
                                 let solverScript = fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8');
