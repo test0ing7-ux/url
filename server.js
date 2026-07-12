@@ -763,15 +763,15 @@ app.use((req, res, next) => {
 
                         // ── Rewrite JS-level window.location.href = "https://real-domain/..." assignments ──
                         // Catch hardcoded redirect URLs in JavaScript that would break out of the proxy
-                        text = text.replace(/window\.location\.href\s*=\s*['"]https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)([^'"]*)['"/g, (m, host, path) => {
+                        text = text.replace(new RegExp('window\\.location\\.href\\s*=\\s*[\\x27"]https?://([a-z0-9.-]+\\.testpad\\.chitkarauniversity\\.edu\\.in)([^\\x27"]*)[\\x27"]', 'g'), (m, host, path) => {
                             const proxyOrigin = `https://${getOriginalHost(req)}`;
                             return `window.location.href="${getProxyUrlForDomain(host, proxyOrigin)}${path}"`;
                         });
-                        text = text.replace(/window\.location\.replace\s*\(\s*['"]https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)([^'"]*)['"]\s*\)/g, (m, host, path) => {
+                        text = text.replace(new RegExp('window\\.location\\.replace\\s*\\(\\s*[\\x27"]https?://([a-z0-9.-]+\\.testpad\\.chitkarauniversity\\.edu\\.in)([^\\x27"]*)[\\x27"]\\s*\\)', 'g'), (m, host, path) => {
                             const proxyOrigin = `https://${getOriginalHost(req)}`;
                             return `window.location.replace("${getProxyUrlForDomain(host, proxyOrigin)}${path}")`;
                         });
-                        text = text.replace(/window\.location\s*=\s*['"]https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)([^'"]*)['"/g, (m, host, path) => {
+                        text = text.replace(new RegExp('window\\.location\\s*=\\s*[\\x27"]https?://([a-z0-9.-]+\\.testpad\\.chitkarauniversity\\.edu\\.in)([^\\x27"]*)[\\x27"]', 'g'), (m, host, path) => {
                             const proxyOrigin = `https://${getOriginalHost(req)}`;
                             return `window.location="${getProxyUrlForDomain(host, proxyOrigin)}${path}"`;
                         });
