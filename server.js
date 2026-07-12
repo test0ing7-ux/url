@@ -502,7 +502,7 @@ app.use((req, res, next) => {
                     // Request compressed formats we can decode (Cloudflare blocks identity)
                     proxyReq.setHeader('Accept-Encoding', 'gzip, deflate, br');
                     // Remove headers that would break the proxy or trigger Cloudflare blocks
-                    const badHeaders = ['x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for', 'cf-ray', 'cf-connecting-ip', 'cf-visitor', 'cf-ipcountry', 'x-real-ip', 'true-client-ip', 'cf-worker', 'cf-ew-via', 'x-railway-edge', 'x-railway-request-id', 'x-request-start'];
+                    const badHeaders = ['x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for', 'cf-ray', 'cf-connecting-ip', 'cf-visitor', 'cf-ipcountry', 'x-real-ip', 'true-client-ip', 'cf-worker', 'cf-ew-via', 'x-railway-edge', 'x-railway-request-id', 'x-request-start', 'if-none-match', 'if-modified-since'];
                     for (const h of badHeaders) {
                         proxyReq.removeHeader(h);
                     }
