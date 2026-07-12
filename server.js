@@ -291,6 +291,15 @@ app.use('/__extproxy__', createProxyMiddleware({
                     if (text.includes('"endTime"')) {
                         text = text.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
                     }
+                    // Inject <base> tag so relative paths resolve to __extproxy__ instead of root
+                    if (isHtml) {
+                        const baseTag = `<base href="/__extproxy__/${extHost}/">`;
+                        if (text.match(/<head([^>]*)>/i)) {
+                            text = text.replace(/<head([^>]*)>/i, `<head$1>\n${baseTag}`);
+                        } else {
+                            text = `${baseTag}\n${text}`;
+                        }
+                    }
                     res.statusCode = proxyRes.statusCode;
                     res.end(text);
                 } else {
