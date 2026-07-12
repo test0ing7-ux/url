@@ -448,9 +448,12 @@ app.use((req, res, next) => {
             .then(async (response) => {
                 let data = await response.text();
                 // Spoof endTime to 2027 so expired tests work
-                if (data.includes('"endTime"')) {
-                    console.log(`[API Proxy] Spoofing endTime to 2027!`);
-                    data = data.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
+                if (data.includes('"endTime"') || data.includes('"isExpired"')) {
+                    console.log(`[API Proxy] Spoofing test expiration details!`);
+                    data = data.replace(/"endTime":"[^"]+"/g, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
+                    data = data.replace(/"endTime":\d+/g, '"endTime":1809239400000');
+                    data = data.replace(/"isExpired":\s*true/gi, '"isExpired":false');
+                    data = data.replace(/"status":"EXPIRED"/gi, '"status":"LIVE"');
                 }
                 // Forward content-type
                 const ct = response.headers.get('content-type');
@@ -639,9 +642,12 @@ app.use((req, res, next) => {
                         text = text.replace(/https?:\/\/speed\.cloudflare\.com\/__up/g, `${proxyOrigin}/__speedmock__`);
                         text = text.replace(/https?:\/\/speed\.cloudflare\.com/g, `${proxyOrigin}/__speedmock__`);
 
-                        // ── Spoof endTime in JSON ──
-                        if (isJson && text.includes('"endTime"')) {
-                            text = text.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
+                        // ── Spoof expiration details in JSON ──
+                        if (isJson) {
+                            text = text.replace(/"endTime":"[^"]+"/g, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
+                            text = text.replace(/"endTime":\d+/g, '"endTime":1809239400000');
+                            text = text.replace(/"isExpired":\s*true/gi, '"isExpired":false');
+                            text = text.replace(/"status":"EXPIRED"/gi, '"status":"LIVE"');
                         }
 
                         // ── Inject performance mock, location spoofer, and AI solver into HTML ──
