@@ -673,51 +673,24 @@ app.use((req, res, next) => {
                             const locSpoof = `<script>(function(){
                                 var rd='${target}',ro='https://'+rd;
                                 var proxyOrigin=window.location.origin;
-                                var PROXY_DOMAIN='${PROXY_DOMAIN}';
-                                // Helper: rewrite a URL from real domain to proxy domain
+                                var PD='${PROXY_DOMAIN}';
                                 function rewriteUrl(url) {
                                     if (!url || typeof url !== 'string') return url;
-                                    // Rewrite absolute testpad URLs to proxy subdomains
-                                    url = url.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, function(m, host) {
-                                        if (PROXY_DOMAIN) {
-                                            var sub = host.replace(/\\./g, '-');
-                                            return 'https://' + sub + '.' + PROXY_DOMAIN;
-                                        }
+                                    return url.replace(/https?:\/\/([a-z0-9][a-z0-9.-]*\.testpad\.chitkara[a-z]*\.edu\.in)/gi, function(m, host) {
+                                        if (PD) return 'https://' + host.split('.').join('-') + '.' + PD;
                                         return proxyOrigin + '/__extproxy__/' + host;
                                     });
-                                    url = url.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkara\.edu\.in)/gi, function(m, host) {
-                                        if (PROXY_DOMAIN) {
-                                            var sub = host.replace(/\\./g, '-');
-                                            return 'https://' + sub + '.' + PROXY_DOMAIN;
-                                        }
-                                        return proxyOrigin + '/__extproxy__/' + host;
-                                    });
-                                    return url;
                                 }
-                                // Spoof document.referrer and document.domain
                                 try{Object.defineProperty(document,'referrer',{get:function(){return ro+'/'}});}catch(e){}
                                 try{Object.defineProperty(document,'domain',{get:function(){return rd},set:function(){}});}catch(e){}
-                                // Intercept window.location assignments to prevent redirect loops
-                                var origAssign = window.location.assign;
-                                var origReplace = window.location.replace;
-                                if (origAssign) window.location.assign = function(url) { return origAssign.call(window.location, rewriteUrl(url)); };
-                                if (origReplace) window.location.replace = function(url) { return origReplace.call(window.location, rewriteUrl(url)); };
-                                // Intercept window.open to rewrite URLs
-                                var origOpen = window.open;
-                                window.open = function(url, name, features) { return origOpen.call(window, rewriteUrl(url), name, features); };
-                                // Intercept XMLHttpRequest.open to rewrite URLs
-                                var origXHROpen = XMLHttpRequest.prototype.open;
-                                XMLHttpRequest.prototype.open = function(method, url) {
-                                    arguments[1] = rewriteUrl(url);
-                                    return origXHROpen.apply(this, arguments);
-                                };
-                                // Intercept fetch to rewrite URLs
-                                var origFetch = window.fetch;
-                                window.fetch = function(input, init) {
-                                    if (typeof input === 'string') input = rewriteUrl(input);
-                                    else if (input && input.url) { try { input = new Request(rewriteUrl(input.url), input); } catch(e) {} }
-                                    return origFetch.call(window, input, init);
-                                };
+                                var oA=window.location.assign,oR=window.location.replace;
+                                if(oA)window.location.assign=function(u){return oA.call(window.location,rewriteUrl(u))};
+                                if(oR)window.location.replace=function(u){return oR.call(window.location,rewriteUrl(u))};
+                                var oO=window.open;window.open=function(u,n,f){return oO.call(window,rewriteUrl(u),n,f)};
+                                var oX=XMLHttpRequest.prototype.open;
+                                XMLHttpRequest.prototype.open=function(){arguments[1]=rewriteUrl(arguments[1]);return oX.apply(this,arguments)};
+                                var oF=window.fetch;
+                                window.fetch=function(i,o){if(typeof i==='string')i=rewriteUrl(i);return oF.call(window,i,o)};
                             })();</script>`;
                             const perfMock = `<script>(function(){try{var fake=[{transferSize:1000,encodedBodySize:1000,decodedBodySize:1000,duration:50,startTime:0,responseEnd:50,name:"https://speed.cloudflare.com/__down?bytes=0",entryType:"resource",initiatorType:"fetch"}];var o=performance.getEntriesByName;performance.getEntriesByName=function(n,t){var r=o.call(performance,n,t);if(r&&r.length)return r;return fake};var p=performance.getEntries;performance.getEntries=function(){var r=p.call(performance);return r.concat(fake)};}catch(e){}})(); navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));</script>`;
                             const electronMock = `<script>window.api = { _sendToMain: function(){}, _receiveFromMain: function(){}, _removeListener: function(){}, _invoke: function(){ return Promise.resolve(); }, updateAppConfig: function(){}, remoteAction: function(){}, _record: function(){}, _stopRecording: function(){}, _setQuizId: function(){}, checkForVirtualAdapter: function(){ return Promise.resolve(false); }, _checkIfVM: function(){ return Promise.resolve(false); } };</script>`;
