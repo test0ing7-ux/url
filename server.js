@@ -446,8 +446,20 @@ app.use((req, res, next) => {
         headers.cookie = browserCookies;
         console.log(`[API Proxy] Cookies: ${headers.cookie ? headers.cookie.substring(0, 80) : 'NONE'}`);
 
-        fetch(targetUrl, { method: req.method, headers, redirect: 'follow' })
+        fetch(targetUrl, { method: req.method, headers, redirect: 'manual' })
             .then(async (response) => {
+                // If it's a redirect, we MUST forward the redirect to the browser so the React app
+                // sees rawResponse.redirected = true and navigates to the login page!
+                if (response.status >= 300 && response.status < 400) {
+                    const loc = response.headers.get('location');
+                    if (loc) res.setHeader('Location', loc);
+                    const setCookies = response.headers.getSetCookie ? response.headers.getSetCookie() : [];
+                    if (setCookies.length > 0) {
+                        res.setHeader('Set-Cookie', setCookies);
+                    }
+                    return res.status(response.status).end();
+                }
+
                 let data = await response.text();
                 // Spoof endTime to 2027 so expired tests work
                 if (data.includes('"endTime"') || data.includes('"isExpired"') || data.includes('"isAppOnly"')) {
@@ -462,14 +474,6 @@ app.use((req, res, next) => {
                 }
                 // Forward content-type
                 const ct = response.headers.get('content-type');
-                
-                // If it returned HTML but the app expects JSON (because it's the json=1 preflight),
-                // it means the session expired and we got redirected to the login page.
-                if (ct && ct.includes('text/html')) {
-                    res.setHeader('Content-Type', 'application/json');
-                    return res.status(401).send(JSON.stringify({ error: "Session expired", message: "Please log in again.", type: "error", status: 401 }));
-                }
-
                 if (ct) res.setHeader('Content-Type', ct);
                 // Rewrite Set-Cookie headers
                 const setCookies = response.headers.getSetCookie ? response.headers.getSetCookie() : [];
