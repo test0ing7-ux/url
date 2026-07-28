@@ -13,11 +13,6 @@ const API_KEY = process.env.GROQ_API_KEY || process.env.API_KEY || "";
 const PROXY_DOMAIN = process.env.PROXY_DOMAIN || '';
 
 function getProxyUrlForDomain(targetDomain, proxyOrigin) {
-    if (PROXY_DOMAIN) {
-        const sub = targetDomain.replace(/\./g, '-');
-        const scheme = proxyOrigin.split('://')[0] || 'https';
-        return `${scheme}://${sub}.${PROXY_DOMAIN}`;
-    }
     return `${proxyOrigin}/__extproxy__/${targetDomain}`;
 }
 
@@ -28,11 +23,25 @@ app.disable("x-powered-by");
 // CORS — Allow Electron/Desktop apps to fetch from us
 // ═══════════════════════════════════════════════════════════════
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH');
-    res.header('Access-Control-Allow-Headers', '*');
-    if (req.method === 'OPTIONS') {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
         return res.sendStatus(200);
+    }
+    next();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// REFERER REWRITER — Fixes relative paths from __extproxy__ iframes
+// ═══════════════════════════════════════════════════════════════
+app.use((req, res, next) => {
+    if (!req.url.startsWith('/__extproxy__') && req.headers.referer) {
+        const match = req.headers.referer.match(/\/__extproxy__\/([a-zA-Z0-9.-]+)\//);
+        if (match) {
+            const extDomain = match[1];
+            return res.redirect(307, `/__extproxy__/${extDomain}${req.url}`);
+        }
     }
     next();
 });
@@ -453,6 +462,14 @@ app.use((req, res, next) => {
                 }
                 // Forward content-type
                 const ct = response.headers.get('content-type');
+                
+                // If it returned HTML but the app expects JSON (because it's the json=1 preflight),
+                // it means the session expired and we got redirected to the login page.
+                if (ct && ct.includes('text/html')) {
+                    res.setHeader('Content-Type', 'application/json');
+                    return res.status(401).send(JSON.stringify({ error: "Session expired", message: "Please log in again.", type: "error", status: 401 }));
+                }
+
                 if (ct) res.setHeader('Content-Type', ct);
                 // Rewrite Set-Cookie headers
                 const setCookies = response.headers.getSetCookie ? response.headers.getSetCookie() : [];
@@ -603,6 +620,12 @@ app.use((req, res, next) => {
                 stream.on('data', (chunk) => chunks.push(chunk));
                 stream.on('end', () => {
                     let body = Buffer.concat(chunks);
+                    
+                    const isApiPath = req.url.includes('/api/') || req.url.includes('quiz-api') || req.url.includes('/__extproxy__/infra');
+                    if (isHtml && isApiPath) {
+                        res.setHeader('Content-Type', 'application/json');
+                        return res.end(JSON.stringify({ error: "Session expired", message: "Please refresh the page to log in again.", type: "error", status: 401 }));
+                    }
 
                     if (isText) {
                         let text = body.toString('utf-8');
