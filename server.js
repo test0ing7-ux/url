@@ -668,7 +668,7 @@ app.use((req, res, next) => {
                         if (isHtml) {
                             const isNavigation = req.headers['sec-fetch-dest'] === 'document' || req.headers['sec-fetch-dest'] === 'iframe' || (req.headers.accept && req.headers.accept.includes('text/html') && req.headers['sec-fetch-mode'] === 'navigate') || (!req.headers['sec-fetch-dest'] && !req.headers['x-requested-with']);
                             const isFullPage = isNavigation && /^\s*(<!doctype|<html|<head>|<head\s)/i.test(text);
-                            if (isFullPage) {
+                            if (isFullPage) { console.log(`[PROXY] Injecting into: ${req.url} | sec-fetch-dest: ${req.headers["sec-fetch-dest"]} | mode: ${req.headers["sec-fetch-mode"]} | x-requested-with: ${req.headers["x-requested-with"]}`);
                                 const proxyHost = getOriginalHost(req);
                             // Location spoofer — comprehensive: intercepts all location redirects and rewrites them through proxy
                             const locSpoof = `<script>(function(){
@@ -749,7 +749,7 @@ app.use((req, res, next) => {
                                     return{getValue:function(){return ta.value},setValue:function(v){ta.value=v},getDoc:function(){return{getCursor:function(){return{line:0,ch:ta.value.length}},replaceRange:function(t,p){ta.value+=t}}},on:function(){},off:function(){},refresh:function(){},focus:function(){ta.focus()},replaceSelection:function(t){ta.value+=t},setOption:function(){},getOption:function(){return null},toTextArea:function(){}};
                                 };window.CodeMirror.fromTextArea=function(ta,opts){var v=ta.value||'';ta.style.display='none';var cm=window.CodeMirror(ta.parentNode,Object.assign({},opts,{value:v}));return cm};window.CodeMirror.defineMode=function(){};window.CodeMirror.defineMIME=function(){};window.CodeMirror.defaults={};}
                             })();</script>`;
-                            const injected = `${locSpoof} ${perfMock} ${electronMock} ${pmMock} ${socketMock} ${pluginStubs}`.replace(/\n\s*/g, ' ');
+                            const injected = `${locSpoof}\n${perfMock}\n${electronMock}\n${pmMock}\n${socketMock}\n${pluginStubs}`;
                             // Try injecting after <head>, fallback to before <html>, fallback to prepend
                             if (/<head(>|\s[^>]*>)/i.test(text)) {
                                 text = text.replace(/<head(>|\s[^>]*>)/i, `<head$1>\n${injected}`);
