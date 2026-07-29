@@ -35,7 +35,7 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
   const MCQ_PROMPT = "You are an expert exam solver. Given a multiple-choice question with options, respond with ONLY the text of the correct option. STRICT RULE: Read ALL options carefully. Eliminate wrong ones first. The answer MUST be the EXACT text of one option — copy it character by character. DO NOT paraphrase. DO NOT include prefixes like 'Option A' or 'The correct answer is'. Output NOTHING BUT the exact option text.";
   const WRITE_PROMPT = "You are an expert exam solver. For code questions, you MUST write COMPLETE, COMPILABLE code in the language the user started. Handle ALL edge cases. STRICT RULE: Output ONLY raw code. NEVER use markdown formatting. NEVER wrap code in 'backticks'. NEVER explain. Just the exact code text to be typed.";
 
-  const GAS_URL = "https://script.google.com/macros/s/AKfycbzrYUNPYFeWYg_Pw1WZov5aryQhxno4pzW7Gd3kKRL4_rSkp21zHA0ByQyLWPy5tXcJ/exec";
+  const WORKER_URL = "https://ai-script.test0ing7.workers.dev/";
 
   async function callAI(question, isWritten) {
     console.log("[S] callAI() called. isWritten:", isWritten, "prompt length:", question.length);
@@ -81,9 +81,9 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
       // === Attempt 2: Google Apps Script fallback ===
       if (!directOk) {
         console.log("[S] Attempt 2: Google Apps Script fallback");
-        try {
-          res = await pristineFetch(GAS_URL, {
-            method: "POST",
+          try {
+            res = await pristineFetch(WORKER_URL, {
+              method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ key: GROQ_KEY, payload: payload }),
             redirect: "follow"

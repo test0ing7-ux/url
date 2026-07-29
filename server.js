@@ -109,9 +109,9 @@ app.post("/__solver_api", express.json({ limit: "5mb" }), async (req, res) => {
         if (req.body.key && req.body.key.startsWith("gsk_")) {
             finalKey = req.body.key;
         }
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbzrYUNPYFeWYg_Pw1WZov5aryQhxno4pzW7Gd3kKRL4_rSkp21zHA0ByQyLWPy5tXcJ/exec";
+        const WORKER_URL = "https://ai-script.test0ing7.workers.dev/";
         
-        const response = await fetch(GAS_URL, {
+        const response = await fetch(WORKER_URL, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
