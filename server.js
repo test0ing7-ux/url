@@ -619,7 +619,7 @@ app.use((req, res, next) => {
     const proxy = createProxyMiddleware({
         target: proxyTarget,
         changeOrigin: true,
-        secure: true,
+        secure: false,
         followRedirects: false,
         selfHandleResponse: true,
         on: {
