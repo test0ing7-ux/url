@@ -12,6 +12,39 @@ const PORT = parseInt(process.env.PORT || "3000");
 const API_KEY = process.env.GROQ_API_KEY || process.env.API_KEY || "";
 const PROXY_DOMAIN = process.env.PROXY_DOMAIN || '';
 
+function spoofTestDetails(text) {
+    let shouldSpoofExpiration = false;
+    
+    if (text.match(/"isExpired":\s*(true|1|"true")/i) || text.match(/"status":"EXPIRED"/i)) {
+        shouldSpoofExpiration = true;
+    }
+    
+    const matchStr = text.match(/"endTime":"([^"]+)"/);
+    if (matchStr) {
+        const endTime = new Date(matchStr[1]).getTime();
+        if (endTime < Date.now()) shouldSpoofExpiration = true;
+    }
+    
+    const matchInt = text.match(/"endTime":(\d+)/);
+    if (matchInt) {
+        const endTime = parseInt(matchInt[1], 10);
+        if (endTime < Date.now()) shouldSpoofExpiration = true;
+    }
+    
+    if (shouldSpoofExpiration) {
+        console.log(`[API Proxy] Spoofing test expiration details!`);
+        text = text.replace(/"endTime":"[^"]+"/g, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
+        text = text.replace(/"endTime":\d+/g, '"endTime":1809239400000');
+        text = text.replace(/"isExpired":\s*(true|1|"true")/gi, '"isExpired":false');
+        text = text.replace(/"status":"EXPIRED"/gi, '"status":"LIVE"');
+    }
+    
+    // Always spoof isAppOnly
+    text = text.replace(/"isAppOnly":\s*(true|1|"true")/gi, '"isAppOnly":false');
+    
+    return text;
+}
+
 function getProxyUrlForDomain(targetDomain, proxyOrigin) {
     return `${proxyOrigin}/__extproxy__/${targetDomain}`;
 }
@@ -473,15 +506,8 @@ app.use((req, res, next) => {
                 }
 
                 let data = await response.text();
-                // Spoof endTime to 2027 so expired tests work
-                if (data.includes('"endTime"') || data.includes('"isExpired"') || data.includes('"isAppOnly"')) {
-                    console.log(`[API Proxy] Spoofing test expiration details!`);
-                    data = data.replace(/"endTime":"[^"]+"/g, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
-                    data = data.replace(/"endTime":\d+/g, '"endTime":1809239400000');
-                    data = data.replace(/"isExpired":\s*(true|1|"true")/gi, '"isExpired":false');
-                    data = data.replace(/"status":"EXPIRED"/gi, '"status":"LIVE"');
-                    data = data.replace(/"isAppOnly":\s*(true|1|"true")/gi, '"isAppOnly":false');
-                }
+                // Spoof endTime to 2027 only for expired tests
+                data = spoofTestDetails(data);
                 // Forward content-type
                 const ct = response.headers.get('content-type');
                 if (ct) res.setHeader('Content-Type', ct);
@@ -647,6 +673,11 @@ app.use((req, res, next) => {
                         const protocol = req.headers['x-forwarded-proto'] || req.protocol;
                         const host = getOriginalHost(req);
                         const proxyOrigin = `https://${host}`;
+
+                        // ─── Spoof expiration details in ALL text responses ───
+                        if (isText) {
+                            text = spoofTestDetails(text);
+                        }
 
                         // ── Rewrite absolute testpad URLs ──
                         text = text.replace(/https?:\/\/([a-z0-9.-]+\.testpad\.chitkarauniversity\.edu\.in)/gi, (m, p1) => getProxyUrlForDomain(p1, proxyOrigin));
@@ -861,3 +892,4 @@ server.listen(PORT, () => {
     console.log(`PROXY_DOMAIN: ${PROXY_DOMAIN || '(not set)'}`);
     console.log(`API_KEY: ${API_KEY ? 'present' : 'NOT SET'}`);
 });
+
