@@ -109,22 +109,30 @@ function getOriginalHost(req) {
 }
 
 function extractTarget(req) {
-    if (req.headers['x-target-domain']) {
-        return req.headers['x-target-domain'];
-    }
-    const hostname = getOriginalHost(req);
+    let target = HARDCODED_TARGET;
     
-    // If PROXY_DOMAIN is set and request uses subdomains, decode them
-    if (PROXY_DOMAIN && hostname !== PROXY_DOMAIN && hostname !== 'www.' + PROXY_DOMAIN) {
-        const suffix = '.' + PROXY_DOMAIN;
-        if (hostname.endsWith(suffix)) {
-            const encoded = hostname.slice(0, -suffix.length);
-            if (encoded) return encoded.replace(/-/g, '.');
+    if (req.headers['x-target-domain']) {
+        target = req.headers['x-target-domain'];
+    } else {
+        const hostname = getOriginalHost(req);
+        
+        // If PROXY_DOMAIN is set and request uses subdomains, decode them
+        if (PROXY_DOMAIN && hostname !== PROXY_DOMAIN && hostname !== 'www.' + PROXY_DOMAIN) {
+            const suffix = '.' + PROXY_DOMAIN;
+            if (hostname.endsWith(suffix)) {
+                const encoded = hostname.slice(0, -suffix.length);
+                if (encoded) target = encoded.replace(/-/g, '.');
+            }
         }
     }
     
-    // Default: always proxy to testpad
-    return HARDCODED_TARGET;
+    // Testpad React app sometimes makes relative requests to /quiz-api/ 
+    // which incorrectly hit exam.testpad (frontend) instead of infra.assess (backend API)
+    if (target.startsWith('exam.testpad') && req.url.includes('/quiz-api/')) {
+        target = target.replace('exam.testpad', 'infra.assess.testpad');
+    }
+    
+    return target;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -291,11 +299,13 @@ app.use('/__extproxy__', createProxyMiddleware({
                         text = text.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
                     }
                     if (isHtml) {
-                        const baseTag = `<base href="/__extproxy__/${extHost}/">`;
-                        if (text.match(/<head(>|\s[^>]*>)/i)) {
-                            text = text.replace(/<head(>|\s[^>]*>)/i, (match, p1) => `<head${p1}\n${baseTag}`);
-                        } else {
-                            text = `${baseTag}\n${text}`;
+                        const baseTag = !PROXY_DOMAIN ? `<base href="/__extproxy__/${extHost}/">` : '';
+                        if (baseTag) {
+                            if (text.match(/<head(>|\s[^>]*>)/i)) {
+                                text = text.replace(/<head(>|\s[^>]*>)/i, (match, p1) => `<head${p1}\n${baseTag}`);
+                            } else {
+                                text = `${baseTag}\n${text}`;
+                            }
                         }
                     }
                     res.statusCode = proxyRes.statusCode;
