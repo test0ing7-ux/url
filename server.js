@@ -5,6 +5,9 @@ const fs = require("node:fs");
 const express = require("express");
 const { createProxyMiddleware, responseInterceptor } = require("http-proxy-middleware");
 
+// Fix "self-signed certificate in certificate chain" errors when fetching from Testpad
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 // ═══════════════════════════════════════════════════════════════
 // CONFIGURATION
 // ═══════════════════════════════════════════════════════════════
