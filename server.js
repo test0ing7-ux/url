@@ -566,7 +566,15 @@ app.use((req, res, next) => {
         headers.cookie = browserCookies;
         console.log(`[API Proxy] Cookies: ${headers.cookie ? headers.cookie.substring(0, 80) : 'NONE'}`);
 
-        fetch(targetUrl, { method: req.method, headers, redirect: 'manual' })
+        let dispatcher;
+        try {
+            const { Agent } = require('undici');
+            dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+        } catch (e) {
+            // Ignore if undici is not found
+        }
+
+        fetch(targetUrl, { method: req.method, headers, redirect: 'manual', dispatcher })
             .then(async (response) => {
                 // If it's a redirect, we MUST forward the redirect to the browser so the React app
                 // sees rawResponse.redirected = true and navigates to the login page!
