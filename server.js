@@ -116,8 +116,13 @@ function extractTarget(req) {
     } else {
         const hostname = getOriginalHost(req);
         
-        // If PROXY_DOMAIN is set and request uses subdomains, decode them
-        if (PROXY_DOMAIN && hostname !== PROXY_DOMAIN && hostname !== 'www.' + PROXY_DOMAIN) {
+        // Dynamically extract the target from .edvu.in domains
+        const edvuMatch = hostname.match(/([a-z0-9.-]+\.testpad\.chitkara[a-z]*\.edu\.in)\.edvu\.in/i);
+        if (edvuMatch) {
+            target = edvuMatch[1];
+        } 
+        // Support hyphenated subdomains if PROXY_DOMAIN is set
+        else if (PROXY_DOMAIN && hostname !== PROXY_DOMAIN && hostname !== 'www.' + PROXY_DOMAIN) {
             const suffix = '.' + PROXY_DOMAIN;
             if (hostname.endsWith(suffix)) {
                 const encoded = hostname.slice(0, -suffix.length);
