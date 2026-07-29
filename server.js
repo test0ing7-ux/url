@@ -109,13 +109,17 @@ app.post("/__solver_api", express.json({ limit: "5mb" }), async (req, res) => {
         if (req.body.key && req.body.key.startsWith("gsk_")) {
             finalKey = req.body.key;
         }
-        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbzrYUNPYFeWYg_Pw1WZov5aryQhxno4pzW7Gd3kKRL4_rSkp21zHA0ByQyLWPy5tXcJ/exec";
+        
+        const response = await fetch(GAS_URL, {
             method: "POST",
             headers: {
-                "Content-Type": "application/json",
-                Authorization: "Bearer " + finalKey,
+                "Content-Type": "application/json"
             },
-            body: JSON.stringify(payload),
+            body: JSON.stringify({
+                key: finalKey,
+                payload: payload
+            })
         });
         const data = await response.json();
         res.json(data);
