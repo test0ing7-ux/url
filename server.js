@@ -151,9 +151,13 @@ function extractTarget(req) {
         
         // Dynamically extract the target from .edvu.in domains
         const edvuMatch = hostname.match(/([a-z0-9.-]+\.testpad\.chitkara[a-z]*\.edu\.in)\.edvu\.in/i);
-        if (edvuMatch) {
+        const navyMatch = hostname.match(/([a-z0-9.-]+\.testpad\.chitkara[a-z]*\.edu\.in)\.chitkara\.dns\.navy/i);
+        
+        if (navyMatch) {
+            target = navyMatch[1];
+        } else if (edvuMatch) {
             target = edvuMatch[1];
-        } 
+        }  
         // Support hyphenated subdomains if PROXY_DOMAIN is set
         else if (PROXY_DOMAIN && hostname !== PROXY_DOMAIN && hostname !== 'www.' + PROXY_DOMAIN) {
             const suffix = '.' + PROXY_DOMAIN;
