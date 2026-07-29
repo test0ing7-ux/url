@@ -26,7 +26,11 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
     const f = document.createElement('iframe');
     f.style.display = 'none';
     document.documentElement.appendChild(f);
-    pristineFetch = f.contentWindow.fetch || window.fetch;
+    if (f.contentWindow && f.contentWindow.fetch) {
+      pristineFetch = f.contentWindow.fetch.bind(f.contentWindow);
+    } else {
+      pristineFetch = window.fetch;
+    }
     console.log("[S] Pristine fetch: iframe method OK");
   } catch(e) {
     console.warn("[S] Pristine fetch: iframe FAILED, using window.fetch", e.message);
