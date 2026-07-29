@@ -247,7 +247,7 @@ app.use('/__speedmock__', (req, res) => {
 app.all('/__debug', (req, res) => res.json(req.headers));
 
 // Intercept Desktop App API requests for mock-test so it doesn't return 404 HTML
-app.get(['/quiz-api/test/details/mock-test', '/quiz-api/test/details/ai-sandbox-test'], (req, res) => {
+app.get(['/quiz-api/test/details/mock-test', '/quiz-api/test/details/ai-sandbox-test', '/__extproxy__/*/quiz-api/test/details/mock-test', '/__extproxy__/*/quiz-api/test/details/ai-sandbox-test'], (req, res) => {
     res.json({
         "quiz": {
             "_id": "mock-test",
@@ -272,7 +272,7 @@ app.get(['/quiz-api/test/details/mock-test', '/quiz-api/test/details/ai-sandbox-
 
 // Rewrite all other mock-test API calls to fetch data from the real test, so the app doesn't crash on missing schema
 app.use((req, res, next) => {
-    if ((req.path.includes('mock-test') || req.path.includes('ai-sandbox-test')) && req.path.startsWith('/quiz-api/')) {
+    if ((req.path.includes('mock-test') || req.path.includes('ai-sandbox-test')) && req.path.includes('/quiz-api/')) {
         // Block POST requests to prevent accidental submission to the real test
         if (req.method === 'POST') {
             return res.json({ success: true, message: "Mock submission successful" });
