@@ -191,12 +191,24 @@ app.get(['/mock-test', '/test/mock-test'], (req, res) => {
     // If the Desktop App requests JSON format directly
     if (req.query.json === '1' || req.query.json === 'true' || req.headers.accept?.includes('application/json')) {
         return res.json({
-            endTime: "Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)",
-            title: "Mock Test",
-            status: "published",
-            isQuiz: true,
-            isExpired: false,
-            isAppOnly: false
+            "quiz": {
+                "_id": "mock-test",
+                "title": "Mock Test",
+                "quizTime": "60",
+                "questions": "3",
+                "instructions": "<p>Mock Test Environment</p>",
+                "userCreatorId": "6673eb49d44d15271e254fd5",
+                "isWebCamAllowed": "false",
+                "isPrivate": "false",
+                "isSignUpAllowed": "false",
+                "startTime": "Sat May 02 2020 05:30:00 GMT+0000 (Coordinated Universal Time)",
+                "tabSwitchAllowed": "true",
+                "copyPasteAllowed": "true",
+                "isFullScreen": "false",
+                "endTime": "Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)",
+                "isAppOnly": "false",
+                "allowClose": "true"
+            }
         });
     }
 
@@ -231,13 +243,24 @@ app.all('/__debug', (req, res) => res.json(req.headers));
 // Intercept Desktop App API requests for mock-test so it doesn't return 404 HTML
 app.get(['/quiz-api/test/details/mock-test', '/quiz-api/test/details/ai-sandbox-test'], (req, res) => {
     res.json({
-        endTime: "Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)",
-        title: "Mock Test",
-        status: "published",
-        isQuiz: true,
-        isExpired: false,
-        isAppOnly: false,
-        questions: []
+        "quiz": {
+            "_id": "mock-test",
+            "title": "Mock Test",
+            "quizTime": "60",
+            "questions": "3",
+            "instructions": "<p>Mock Test Environment</p>",
+            "userCreatorId": "6673eb49d44d15271e254fd5",
+            "isWebCamAllowed": "false",
+            "isPrivate": "false",
+            "isSignUpAllowed": "false",
+            "startTime": "Sat May 02 2020 05:30:00 GMT+0000 (Coordinated Universal Time)",
+            "tabSwitchAllowed": "true",
+            "copyPasteAllowed": "true",
+            "isFullScreen": "false",
+            "endTime": "Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)",
+            "isAppOnly": "false",
+            "allowClose": "true"
+        }
     });
 });
 
