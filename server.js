@@ -264,6 +264,19 @@ app.get(['/quiz-api/test/details/mock-test', '/quiz-api/test/details/ai-sandbox-
     });
 });
 
+// Rewrite all other mock-test API calls to fetch data from the real test, so the app doesn't crash on missing schema
+app.use((req, res, next) => {
+    if ((req.path.includes('mock-test') || req.path.includes('ai-sandbox-test')) && req.path.startsWith('/quiz-api/')) {
+        // Block POST requests to prevent accidental submission to the real test
+        if (req.method === 'POST') {
+            return res.json({ success: true, message: "Mock submission successful" });
+        }
+        // Rewrite URL to fetch real questions/sections
+        req.url = req.url.replace('mock-test', 'hp-cse-6-fa-2-0205').replace('ai-sandbox-test', 'hp-cse-6-fa-2-0205');
+    }
+    next();
+});
+
 // ═══════════════════════════════════════════════════════════════
 // EXTERNAL PROXY — Proxies requests to external domains that the
 // Testpad app calls directly (e.g. infra.assess.testpad...)
