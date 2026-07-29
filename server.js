@@ -187,7 +187,19 @@ function extractTarget(req) {
 // ═══════════════════════════════════════════════════════════════
 // MOCK TEST ENVIRONMENT
 // ═══════════════════════════════════════════════════════════════
-app.get('/mock-test', (req, res) => {
+app.get(['/mock-test', '/test/mock-test'], (req, res) => {
+    // If the Desktop App requests JSON format directly
+    if (req.query.json === '1' || req.query.json === 'true' || req.headers.accept?.includes('application/json')) {
+        return res.json({
+            endTime: "Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)",
+            title: "Mock Test",
+            status: "published",
+            isQuiz: true,
+            isExpired: false,
+            isAppOnly: false
+        });
+    }
+
     const fs = require('fs');
     const path = require('path');
     let html = fs.readFileSync(path.join(__dirname, 'mock-test.html'), 'utf8');
@@ -215,6 +227,19 @@ app.use('/__speedmock__', (req, res) => {
 });
 
 app.all('/__debug', (req, res) => res.json(req.headers));
+
+// Intercept Desktop App API requests for mock-test so it doesn't return 404 HTML
+app.get(['/quiz-api/test/details/mock-test', '/quiz-api/test/details/ai-sandbox-test'], (req, res) => {
+    res.json({
+        endTime: "Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)",
+        title: "Mock Test",
+        status: "published",
+        isQuiz: true,
+        isExpired: false,
+        isAppOnly: false,
+        questions: []
+    });
+});
 
 // ═══════════════════════════════════════════════════════════════
 // EXTERNAL PROXY — Proxies requests to external domains that the
