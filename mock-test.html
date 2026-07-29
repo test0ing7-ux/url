@@ -11,6 +11,11 @@
         .options li { margin-bottom: 10px; }
         .options label { cursor: pointer; display: flex; align-items: center; }
         .options input { margin-right: 10px; }
+        .question-block { display: none; }
+        .question-block.active { display: block; }
+        .nav-buttons { margin-top: 20px; display: flex; justify-content: space-between; }
+        .btn { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -18,38 +23,69 @@
         <h1>Mock Test Environment</h1>
         <p>This is a fake test environment to verify that the AI Solver script is injecting and working correctly.</p>
         <hr>
-        <div class="question">
-            <strong>Q1. Which of the following is a dynamically typed language?</strong>
+        
+        <div id="q1" class="question-block active">
+            <div class="question">
+                <strong>Q1. Which of the following is a dynamically typed language?</strong>
+            </div>
+            <ul class="options">
+                <li><label><input type="radio" name="q1"> Java</label></li>
+                <li><label><input type="radio" name="q1"> C++</label></li>
+                <li><label><input type="radio" name="q1"> Python</label></li>
+                <li><label><input type="radio" name="q1"> C#</label></li>
+            </ul>
         </div>
-        <ul class="options">
-            <li><label><input type="radio" name="q1"> Java</label></li>
-            <li><label><input type="radio" name="q1"> C++</label></li>
-            <li><label><input type="radio" name="q1"> Python</label></li>
-            <li><label><input type="radio" name="q1"> C#</label></li>
-        </ul>
-        <hr>
-        <div class="question">
-            <strong>Q2. What is the time complexity of binary search?</strong>
+
+        <div id="q2" class="question-block">
+            <div class="question">
+                <strong>Q2. What is the time complexity of binary search?</strong>
+            </div>
+            <ul class="options">
+                <li><label><input type="radio" name="q2"> O(1)</label></li>
+                <li><label><input type="radio" name="q2"> O(n)</label></li>
+                <li><label><input type="radio" name="q2"> O(n log n)</label></li>
+                <li><label><input type="radio" name="q2"> O(log n)</label></li>
+            </ul>
         </div>
-        <ul class="options">
-            <li><label><input type="radio" name="q2"> O(1)</label></li>
-            <li><label><input type="radio" name="q2"> O(n)</label></li>
-            <li><label><input type="radio" name="q2"> O(n log n)</label></li>
-            <li><label><input type="radio" name="q2"> O(log n)</label></li>
-        </ul>
-        <hr>
-        <div class="question">
-            <strong>Q3. Which protocol is used for secure communication over the internet?</strong>
+
+        <div id="q3" class="question-block">
+            <div class="question">
+                <strong>Q3. Which protocol is used for secure communication over the internet?</strong>
+            </div>
+            <ul class="options">
+                <li><label><input type="radio" name="q3"> FTP</label></li>
+                <li><label><input type="radio" name="q3"> HTTP</label></li>
+                <li><label><input type="radio" name="q3"> HTTPS</label></li>
+                <li><label><input type="radio" name="q3"> SMTP</label></li>
+            </ul>
         </div>
-        <ul class="options">
-            <li><label><input type="radio" name="q3"> FTP</label></li>
-            <li><label><input type="radio" name="q3"> HTTP</label></li>
-            <li><label><input type="radio" name="q3"> HTTPS</label></li>
-            <li><label><input type="radio" name="q3"> SMTP</label></li>
-        </ul>
-        <button style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Submit Answer</button>
+
+        <div class="nav-buttons">
+            <button id="prevBtn" class="btn" onclick="changeQuestion(-1)" disabled>Previous</button>
+            <button id="nextBtn" class="btn" onclick="changeQuestion(1)">Next</button>
+        </div>
     </div>
     <script>
+        // Pagination logic
+        let currentQ = 1;
+        const totalQ = 3;
+        
+        function changeQuestion(step) {
+            document.getElementById('q' + currentQ).classList.remove('active');
+            currentQ += step;
+            document.getElementById('q' + currentQ).classList.add('active');
+            
+            document.getElementById('prevBtn').disabled = (currentQ === 1);
+            
+            if (currentQ === totalQ) {
+                document.getElementById('nextBtn').innerText = 'Submit Answer';
+                document.getElementById('nextBtn').onclick = () => alert('Test Submitted!');
+            } else {
+                document.getElementById('nextBtn').innerText = 'Next';
+                document.getElementById('nextBtn').onclick = () => changeQuestion(1);
+            }
+        }
+
         // Fake some app data that the solver might look for
         window.isTestEnvironment = true;
     </script>
