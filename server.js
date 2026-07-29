@@ -304,11 +304,10 @@ app.use('/__extproxy__', createProxyMiddleware({
                     if (text.includes('"endTime"')) {
                         text = text.replace(/"endTime":"[^"]+"/, '"endTime":"Sat May 02 2027 06:30:00 GMT+0000 (Coordinated Universal Time)"');
                     }
-                    // Inject <base> tag so relative paths resolve to __extproxy__ instead of root
                     if (isHtml) {
                         const baseTag = `<base href="/__extproxy__/${extHost}/">`;
-                        if (text.match(/<head(>|\\s[^>]*>)/i)) {
-                            text = text.replace(/<head(>|\\s[^>]*>)/i, `<head$1>\n${baseTag}`);
+                        if (text.match(/<head(>|\s[^>]*>)/i)) {
+                            text = text.replace(/<head(>|\s[^>]*>)/i, (match, p1) => `<head${p1}\n${baseTag}`);
                         } else {
                             text = `${baseTag}\n${text}`;
                         }
@@ -779,9 +778,9 @@ app.use((req, res, next) => {
                             const injected = `${locSpoof}\n${perfMock}\n${electronMock}\n${pmMock}\n${socketMock}\n${pluginStubs}`;
                             // Try injecting after <head>, fallback to before <html>, fallback to prepend
                             if (/<head(>|\s[^>]*>)/i.test(text)) {
-                                text = text.replace(/<head(>|\s[^>]*>)/i, `<head$1>\n${injected}`);
+                                text = text.replace(/<head(>|\s[^>]*>)/i, (match, p1) => `<head${p1}\n${injected}`);
                             } else if (/<html([^>]*)>/i.test(text)) {
-                                text = text.replace(/<html([^>]*)>/i, `<html$1>\n<head>\n${injected}\n</head>`);
+                                text = text.replace(/<html([^>]*)>/i, (match, p1) => `<html${p1}>\n<head>\n${injected}\n</head>`);
                             } else {
                                 text = `<head>\n${injected}\n</head>\n` + text;
                             }
@@ -789,7 +788,7 @@ app.use((req, res, next) => {
                             try {
                                 let solverScript = fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8');
                                 solverScript = solverScript.replace('${API_KEY}', API_KEY);
-                                text = text.replace(/<\/body>/i, `\n<script id="proxy-solver">\n${solverScript}\n</script>\n</body>`);
+                                text = text.replace(/<\/body>/i, () => `\n<script id="proxy-solver">\n${solverScript}\n</script>\n</body>`);
                             } catch(e) {
                                 console.error("[ExtProxy] Could not inject solver script", e.message);
                             }
