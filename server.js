@@ -282,21 +282,7 @@ app.use('/__extproxy__', createProxyMiddleware({
             stream.on('end', () => {
                 let body = Buffer.concat(chunks);
 
-                // Mock session/data if it returns 401
-                if (req.url.includes('/quiz-api/session/data') && proxyRes.statusCode === 401) {
-                    res.statusCode = 200;
-                    res.setHeader('Content-Type', 'application/json');
-                    res.end(JSON.stringify({
-                        session: {
-                            userId: "mock_user", ssnid: "mock_ssnid", role: "student",
-                            email: "student@test.com", roleId: 1, displayname: "Mock Student",
-                            tryTest: 1, enrollmentId: "12345", isClassAllowed: 1,
-                            allowInteractiveMode: 1, projectSpace: 1, testingSpace: 1,
-                            learningSpace: 1, projectLanguagesAllowed: []
-                        }
-                    }));
-                    return;
-                }
+
 
                 if (isText) {
                     let text = body.toString('utf-8');
@@ -427,19 +413,31 @@ app.use((req, res, next) => {
     // ─── JSON preflight (Testpad app pre-check) ───
     // The Testpad app fetches ?json=1 before loading. We intercept
     // and spoof the endTime so expired tests appear live.
-    if (req.query.json === '1') {
-        const targetUrl = `https://${target}${req.originalUrl}`;
+    if (req.query.json === '1' || req.query.json === 1) {
+        let targetUrl;
+        let targetHost = target;
+        let reqUrl = req.originalUrl;
+        
+        if (req.originalUrl.startsWith('/__extproxy__/')) {
+            const match = req.originalUrl.match(/^\/__extproxy__\/([^\/]+)(.*)$/);
+            if (match) {
+                targetHost = match[1];
+                reqUrl = match[2];
+            }
+        }
+        
+        targetUrl = `https://${targetHost}${reqUrl}`;
         console.log(`[API Proxy] Pre-flight: ${targetUrl}`);
 
         const headers = { ...req.headers };
         delete headers.host;
-        headers.host = target;
+        headers.host = targetHost;
         // Remove Cloudflare/Railway infrastructure headers to avoid Error 1000
         const badHeaders = ['x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for', 'cf-ray', 'cf-connecting-ip', 'cf-visitor', 'cf-ipcountry', 'x-real-ip', 'true-client-ip', 'cf-worker', 'cf-ew-via', 'x-railway-edge', 'x-railway-request-id', 'x-request-start', 'x-target-domain'];
         for (const h of badHeaders) delete headers[h];
         // Set proper origin/referer
-        headers.origin = `https://${target}`;
-        headers.referer = `https://${target}/`;
+        headers.origin = `https://${targetHost}`;
+        headers.referer = `https://${targetHost}/`;
         // Merge browser cookies with server-side jar
         const browserCookies = req.headers.cookie || '';
         headers.cookie = browserCookies;
