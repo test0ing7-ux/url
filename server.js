@@ -875,6 +875,7 @@ app.use((req, res, next) => {
                                 const proxyHost = getOriginalHost(req);
                             // Location spoofer — comprehensive: intercepts all location redirects and rewrites them through proxy
                             const locSpoof = `<script>(function(){
+                                localStorage.removeItem('socketLogout');
                                 var rd='${target}',ro='https://'+rd;
                                 var proxyOrigin=window.location.origin;
                                 var PD='${PROXY_DOMAIN}';
