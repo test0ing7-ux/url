@@ -83,6 +83,59 @@ app.use((req, res, next) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// SOCKET.IO MOCK — Prevent Vercel from timing out on Socket.IO 
+// long polling and trick the client into thinking it connected
+// ═══════════════════════════════════════════════════════════════
+app.all(/^\/(?:__extproxy__\/[^/]+\/)?socket\.io\/?/, (req, res) => {
+    const EIO = req.query.EIO || '3';
+    
+    // Support CORS for polling
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    
+    if (req.method === 'OPTIONS') {
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        return res.status(200).end();
+    }
+    
+    if (req.method === 'GET' && !req.query.sid) {
+        // Initial Handshake
+        let sid = 'mock_sid_' + Math.random().toString(36).substring(2);
+        let payload = JSON.stringify({
+            sid: sid,
+            upgrades: [], // disable websocket upgrade
+            pingInterval: 25000,
+            pingTimeout: 5000,
+            maxPayload: 1000000
+        });
+        
+        if (EIO === '4') {
+            res.send('0' + payload);
+        } else {
+            res.send(payload.length + ':' + '0' + payload);
+        }
+    } else if (req.method === 'POST') {
+        // Client sends data / connect packet
+        res.send('ok');
+    } else if (req.method === 'GET' && req.query.sid) {
+        // Long polling connection. Instead of keeping it open, we return a Socket.IO connect success
+        // or a NOOP/ping to trick the client without timing out on Vercel.
+        // Returning a ping (2) keeps it alive.
+        setTimeout(() => {
+            let msg = '2'; // Engine.IO Ping
+            if (EIO === '4') {
+                res.send(msg);
+            } else {
+                res.send(msg.length + ':' + msg);
+            }
+        }, 1000); // 1-second delay to avoid crazy looping
+    } else {
+        res.status(400).send('Bad Request');
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // CADDY ON-DEMAND TLS CHECK — Caddy asks us before issuing a
 // certificate: "should I get a cert for this domain?" We only
 // approve domains that end with our PROXY_DOMAIN.
