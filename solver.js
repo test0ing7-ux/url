@@ -57,7 +57,11 @@ try { if (document.currentScript) document.currentScript.remove(); } catch(e) {}
       };
 
       // === Attempt 1: Direct proxy route ===
-      const apiUrl = window.location['origin'] + "/__solver_api";
+      const pd = "${PROXY_DOMAIN}";
+      let apiUrl = window.location['origin'] + "/__solver_api";
+      if (pd && pd !== "${PROXY_DOMAIN}" && !apiUrl.includes(pd)) {
+          apiUrl = apiUrl.replace(window.location.hostname, window.location.hostname + "." + pd);
+      }
       console.log("[S] Attempt 1: Direct proxy", apiUrl);
       let directOk = false;
       try {

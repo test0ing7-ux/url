@@ -278,7 +278,7 @@ app.get(['/mock-test', '/test/mock-test'], (req, res) => {
     // Inject solver script
     try {
         let solverScript = fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8');
-        solverScript = solverScript.replace('${API_KEY}', API_KEY);
+        solverScript = solverScript.replace('${API_KEY}', API_KEY).replace('${PROXY_DOMAIN}', PROXY_DOMAIN || 'cuhp.duckdns.org');
         html = html.replace(/<\/body>/i, `\n<script id="proxy-solver">\n${solverScript}\n</script>\n</body>`);
     } catch(e) {
         console.error("Could not inject solver script into mock test", e.message);
@@ -576,9 +576,9 @@ app.get(['/ai-sandbox-test', '/test/ai-sandbox-test'], (req, res) => {
             </script>
         </body>
         <!-- Inject the AI solver script directly for testing -->
-        <script id="proxy-solver">
-            ${fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8').replace('${API_KEY}', API_KEY)}
-        </script>
+          <script id="proxy-solver">
+              ${fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8').replace('${API_KEY}', API_KEY).replace('${PROXY_DOMAIN}', PROXY_DOMAIN || 'cuhp.duckdns.org')}
+          </script>
         </html>
     `);
 });
@@ -975,7 +975,7 @@ app.use((req, res, next) => {
                             
                             try {
                                 let solverScript = fs.readFileSync(path.join(__dirname, 'solver.js'), 'utf8');
-                                solverScript = solverScript.replace('${API_KEY}', API_KEY);
+                                solverScript = solverScript.replace('${API_KEY}', API_KEY).replace('${PROXY_DOMAIN}', PROXY_DOMAIN || 'cuhp.duckdns.org');
                                 text = text.replace(/<\/body>/i, () => `\n<script id="proxy-solver">\n${solverScript}\n</script>\n</body>`);
                             } catch(e) {
                                 console.error("[ExtProxy] Could not inject solver script", e.message);
