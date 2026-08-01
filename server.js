@@ -367,11 +367,13 @@ app.use('/__extproxy__', createProxyMiddleware({
             if (proxyReq.getHeader('origin')) {
                 let origin = proxyReq.getHeader('origin');
                 if (PROXY_DOMAIN) origin = origin.replace('.' + PROXY_DOMAIN, '');
+                origin = origin.replace(/\.[a-z0-9-]+\.duckdns\.org/gi, '').replace(/\.edvu\.in/gi, '').replace(/\.chitkara\.dns\.navy/gi, '');
                 proxyReq.setHeader('Origin', origin);
             }
             if (proxyReq.getHeader('referer')) {
                 let referer = proxyReq.getHeader('referer');
                 if (PROXY_DOMAIN) referer = referer.replace('.' + PROXY_DOMAIN, '');
+                referer = referer.replace(/\.[a-z0-9-]+\.duckdns\.org/gi, '').replace(/\.edvu\.in/gi, '').replace(/\.chitkara\.dns\.navy/gi, '');
                 proxyReq.setHeader('Referer', referer);
             }
             const browserCookies = req.headers.cookie || '';
