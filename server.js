@@ -364,8 +364,16 @@ app.use('/__extproxy__', createProxyMiddleware({
             const badHeaders = ['x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for', 'cf-ray', 'cf-connecting-ip', 'cf-visitor', 'cf-ipcountry', 'x-real-ip', 'true-client-ip', 'cf-worker', 'cf-ew-via', 'x-railway-edge', 'x-railway-request-id', 'x-request-start'];
             for (const h of badHeaders) proxyReq.removeHeader(h);
             
-            if (proxyReq.getHeader('origin')) proxyReq.setHeader('Origin', `https://${extHost}`);
-            if (proxyReq.getHeader('referer')) proxyReq.setHeader('Referer', `https://${extHost}/`);
+            if (proxyReq.getHeader('origin')) {
+                let origin = proxyReq.getHeader('origin');
+                if (PROXY_DOMAIN) origin = origin.replace('.' + PROXY_DOMAIN, '');
+                proxyReq.setHeader('Origin', origin);
+            }
+            if (proxyReq.getHeader('referer')) {
+                let referer = proxyReq.getHeader('referer');
+                if (PROXY_DOMAIN) referer = referer.replace('.' + PROXY_DOMAIN, '');
+                proxyReq.setHeader('Referer', referer);
+            }
             const browserCookies = req.headers.cookie || '';
             if (browserCookies) proxyReq.setHeader('Cookie', browserCookies);
         },
