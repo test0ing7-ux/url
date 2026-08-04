@@ -150,7 +150,7 @@ function getOriginalHost(req) {
     // If the request was routed via a subdomain, Cloudflare worker sets x-target-domain but loses the original host.
     // We reconstruct it to avoid cross-origin issues in the rewritten HTML.
     if (req.headers['x-target-domain'] && req.headers['cf-worker']) {
-        host = req.headers['x-target-domain'].replace(/\./g, '-') + '.' + req.headers['cf-worker'];
+        host = req.headers['x-target-domain'] + '.' + req.headers['cf-worker'];
     }
     return host;
 }
