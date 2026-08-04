@@ -82,58 +82,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// ═══════════════════════════════════════════════════════════════
-// SOCKET.IO MOCK — Prevent Vercel from timing out on Socket.IO 
-// long polling and trick the client into thinking it connected
-// ═══════════════════════════════════════════════════════════════
-app.all(/^\/(?:__extproxy__\/[^/]+\/)?socket\.io\/?/, (req, res) => {
-    const EIO = req.query.EIO || '3';
-    
-    // Support CORS for polling
-    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    
-    if (req.method === 'OPTIONS') {
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        return res.status(200).end();
-    }
-    
-    if (req.method === 'GET' && !req.query.sid) {
-        // Initial Handshake
-        let sid = 'mock_sid_' + Math.random().toString(36).substring(2);
-        let payload = JSON.stringify({
-            sid: sid,
-            upgrades: [], // disable websocket upgrade
-            pingInterval: 25000,
-            pingTimeout: 5000,
-            maxPayload: 1000000
-        });
-        
-        if (EIO === '4') {
-            res.send('0' + payload);
-        } else {
-            res.send(payload.length + ':' + '0' + payload);
-        }
-    } else if (req.method === 'POST') {
-        // Client sends data / connect packet
-        res.send('ok');
-    } else if (req.method === 'GET' && req.query.sid) {
-        // Long polling connection. Instead of keeping it open, we return a Socket.IO connect success
-        // or a NOOP/ping to trick the client without timing out on Vercel.
-        // Returning a ping (2) keeps it alive.
-        setTimeout(() => {
-            let msg = '2'; // Engine.IO Ping
-            if (EIO === '4') {
-                res.send(msg);
-            } else {
-                res.send(msg.length + ':' + msg);
-            }
-        }, 1000); // 1-second delay to avoid crazy looping
-    } else {
-        res.status(400).send('Bad Request');
-    }
-});
+
 
 // ═══════════════════════════════════════════════════════════════
 // CADDY ON-DEMAND TLS CHECK — Caddy asks us before issuing a
@@ -921,32 +870,7 @@ app.use((req, res, next) => {
                                     return origPM.call(this, msg, targetOrigin, transfer);
                                 };
                             })();</script>`;
-                            // Socket.IO mock — testpad uses sockets for answer submission; we mock it and forward via HTTP
-                            const socketMock = `<script>(function(){
-                                var handlers={};
-                                var mockSocket={
-                                    connected:true,
-                                    id:'proxy_mock_'+Math.random().toString(36).substr(2),
-                                    on:function(ev,fn){
-                                        if(!handlers[ev])handlers[ev]=[];
-                                        handlers[ev].push(fn);
-                                        if(ev==='connect'&&mockSocket.connected)setTimeout(fn,10);
-                                        return mockSocket;
-                                    },
-                                    off:function(ev,fn){if(handlers[ev])handlers[ev]=handlers[ev].filter(function(f){return f!==fn});return mockSocket},
-                                    emit:function(ev){
-                                        var args=Array.prototype.slice.call(arguments,1);
-                                        console.log('[SocketMock] emit:',ev,args.length?JSON.stringify(args[0]).substring(0,200):'');
-                                        return mockSocket;
-                                    },
-                                    disconnect:function(){mockSocket.connected=false;return mockSocket},
-                                    connect:function(){mockSocket.connected=true;return mockSocket},
-                                    io:{engine:{transport:{name:'polling'}}}
-                                };
-                                window.io=function(){console.log('[SocketMock] io() called');return mockSocket};
-                                window.io.connect=window.io;
-                                window.socket=mockSocket;
-                            })();</script>`;
+                            // Socket.IO mock removed because it was interfering with real backend connections
                             // jQuery selectpicker + CodeMirror stubs — prevents crashes when plugins don't load through proxy
                             const pluginStubs = `<script>(function(){
                                 function patchJQ(jq){if(jq&&jq.fn&&!jq.fn.selectpicker){jq.fn.selectpicker=function(){return this}}}
@@ -963,7 +887,7 @@ app.use((req, res, next) => {
                                     return{getValue:function(){return ta.value},setValue:function(v){ta.value=v},getDoc:function(){return{getCursor:function(){return{line:0,ch:ta.value.length}},replaceRange:function(t,p){ta.value+=t}}},on:function(){},off:function(){},refresh:function(){},focus:function(){ta.focus()},replaceSelection:function(t){ta.value+=t},setOption:function(){},getOption:function(){return null},toTextArea:function(){}};
                                 };window.CodeMirror.fromTextArea=function(ta,opts){var v=ta.value||'';ta.style.display='none';var cm=window.CodeMirror(ta.parentNode,Object.assign({},opts,{value:v}));return cm};window.CodeMirror.defineMode=function(){};window.CodeMirror.defineMIME=function(){};window.CodeMirror.defaults={};}
                             })();</script>`;
-                            const injected = `${locSpoof}\n${perfMock}\n${electronMock}\n${pmMock}\n${socketMock}\n${pluginStubs}`;
+                            const injected = `${locSpoof}\n${perfMock}\n${electronMock}\n${pmMock}\n${pluginStubs}`;
                             // Try injecting after <head>, fallback to before <html>, fallback to prepend
                             if (/<head(>|\s[^>]*>)/i.test(text)) {
                                 text = text.replace(/<head(>|\s[^>]*>)/i, (match, p1) => `<head${p1}\n${injected}`);
