@@ -1,4 +1,5 @@
 const http = require("node:http");
+const https = require("node:https");
 const path = require("node:path");
 const zlib = require("node:zlib");
 const fs = require("node:fs");
@@ -182,7 +183,7 @@ function extractTarget(req) {
     
     // Testpad React app sometimes makes relative requests to /quiz-api/ 
     // which incorrectly hit exam.testpad (frontend) instead of infra.assess (backend API)
-    if (target.startsWith('exam.testpad') && req.url.includes('/quiz-api/')) {
+    if (target.startsWith('exam.testpad') && (req.url.includes('/quiz-api/') || req.url.includes('/socket.io'))) {
         target = target.replace('exam.testpad', 'infra.assess.testpad');
     }
     
@@ -313,18 +314,9 @@ app.use('/__extproxy__', createProxyMiddleware({
             const badHeaders = ['x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for', 'cf-ray', 'cf-connecting-ip', 'cf-visitor', 'cf-ipcountry', 'x-real-ip', 'true-client-ip', 'cf-worker', 'cf-ew-via', 'x-railway-edge', 'x-railway-request-id', 'x-request-start'];
             for (const h of badHeaders) proxyReq.removeHeader(h);
             
-            if (proxyReq.getHeader('origin')) {
-                let origin = proxyReq.getHeader('origin');
-                if (PROXY_DOMAIN) origin = origin.replace('.' + PROXY_DOMAIN, '');
-                origin = origin.replace(/\.[a-z0-9-]+\.duckdns\.org/gi, '').replace(/\.edvu\.in/gi, '').replace(/\.chitkara\.dns\.navy/gi, '');
-                proxyReq.setHeader('Origin', origin);
-            }
-            if (proxyReq.getHeader('referer')) {
-                let referer = proxyReq.getHeader('referer');
-                if (PROXY_DOMAIN) referer = referer.replace('.' + PROXY_DOMAIN, '');
-                referer = referer.replace(/\.[a-z0-9-]+\.duckdns\.org/gi, '').replace(/\.edvu\.in/gi, '').replace(/\.chitkara\.dns\.navy/gi, '');
-                proxyReq.setHeader('Referer', referer);
-            }
+            // Set Origin/Referer to the actual target host so the backend accepts the request
+            proxyReq.setHeader('Origin', `https://${extHost}`);
+            proxyReq.setHeader('Referer', `https://${extHost}/`);
             const browserCookies = req.headers.cookie || '';
             if (browserCookies) proxyReq.setHeader('Cookie', browserCookies);
         },
@@ -835,6 +827,26 @@ app.use((req, res, next) => {
                             // Location spoofer — comprehensive: intercepts all location redirects and rewrites them through proxy
                             const locSpoof = `<script>(function(){
                                 localStorage.removeItem('socketLogout');
+                                var _origSI=localStorage.setItem.bind(localStorage);
+                                localStorage.setItem=function(k,v){if(k==='socketLogout')return;return _origSI(k,v)};
+                                window.addEventListener('storage',function(e){if(e.key==='socketLogout'){localStorage.removeItem('socketLogout')}});
+                                setInterval(function(){localStorage.removeItem('socketLogout')},2000);
+                                var _OWS=window.WebSocket;
+                                window.WebSocket=function(u,p){
+                                    if(u&&typeof u==='string'&&u.indexOf('socket.io')!==-1){
+                                        var fk={readyState:3,binaryType:'blob',bufferedAmount:0,extensions:'',protocol:'',
+                                            send:function(){},close:function(){},
+                                            addEventListener:function(){},removeEventListener:function(){},dispatchEvent:function(){},
+                                            onopen:null,onclose:null,onerror:null,onmessage:null,
+                                            CONNECTING:0,OPEN:1,CLOSING:2,CLOSED:3};
+                                        setTimeout(function(){try{if(fk.onerror)fk.onerror(new Event('error'))}catch(e){}
+                                            try{if(fk.onclose)fk.onclose({code:1006,reason:'',wasClean:false,type:'close'})}catch(e){}},50);
+                                        return fk;
+                                    }
+                                    return p!==undefined?new _OWS(u,p):new _OWS(u);
+                                };
+                                window.WebSocket.prototype=_OWS.prototype;
+                                window.WebSocket.CONNECTING=0;window.WebSocket.OPEN=1;window.WebSocket.CLOSING=2;window.WebSocket.CLOSED=3;
                                 var rd='${target}',ro='https://'+rd;
                                 var proxyOrigin=window.location.origin;
                                 var PD='${PROXY_DOMAIN}';
@@ -957,6 +969,113 @@ app.use((req, res, next) => {
 // ═══════════════════════════════════════════════════════════════
 const server = http.createServer(app);
 server.setMaxListeners(0); // Prevent EventEmitter warnings from proxy connections
+
+// ═══════════════════════════════════════════════════════════════
+// WEBSOCKET UPGRADE — Forward WebSocket connections to the real
+// backend. Required for Socket.IO which uses WebSocket transport.
+// Without this, Socket.IO falls back to polling which is slower
+// and can fail on some platforms.
+// ═══════════════════════════════════════════════════════════════
+server.on('upgrade', (req, clientSocket, head) => {
+    let targetHost;
+    let targetPath = req.url;
+
+    // Check if it's an __extproxy__ WebSocket
+    const extMatch = req.url.match(/^\/__extproxy__\/([^\/]+)(.*)/);
+    if (extMatch) {
+        targetHost = extMatch[1];
+        targetPath = extMatch[2] || '/';
+    } else {
+        targetHost = extractTarget(req);
+    }
+
+    // Route socket.io to the API backend, not the frontend
+    if (targetHost.startsWith('exam.testpad') && req.url.includes('/socket.io')) {
+        targetHost = targetHost.replace('exam.testpad', 'infra.assess.testpad');
+    }
+
+    console.log(`[WS Upgrade] ${req.url} → wss://${targetHost}${targetPath}`);
+
+    // Build upstream headers — copy browser headers, fix host/origin
+    const upstreamHeaders = {};
+    for (const [key, value] of Object.entries(req.headers)) {
+        upstreamHeaders[key] = value;
+    }
+    upstreamHeaders.host = targetHost;
+    upstreamHeaders.origin = `https://${targetHost}`;
+    if (upstreamHeaders.referer) {
+        upstreamHeaders.referer = `https://${targetHost}/`;
+    }
+
+    // Remove proxy/infrastructure headers that trigger Cloudflare blocks
+    const badHeaders = ['x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for',
+        'cf-ray', 'cf-connecting-ip', 'cf-visitor', 'cf-ipcountry', 'x-real-ip',
+        'true-client-ip', 'cf-worker', 'cf-ew-via', 'x-railway-edge',
+        'x-railway-request-id', 'x-request-start', 'x-target-domain'];
+    for (const h of badHeaders) delete upstreamHeaders[h];
+
+    const proxyReq = https.request({
+        hostname: targetHost,
+        port: 443,
+        path: targetPath,
+        method: 'GET',
+        headers: upstreamHeaders,
+    });
+
+    proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+        console.log(`[WS Upgrade] ✓ Connected to ${targetHost}`);
+
+        // Build the 101 Switching Protocols response
+        let response = 'HTTP/1.1 101 Switching Protocols\r\n';
+        const rawHeaders = proxyRes.rawHeaders;
+        for (let i = 0; i < rawHeaders.length; i += 2) {
+            response += `${rawHeaders[i]}: ${rawHeaders[i + 1]}\r\n`;
+        }
+        response += '\r\n';
+
+        clientSocket.write(response);
+
+        // Forward any buffered data from the upgrade
+        if (proxyHead.length > 0) clientSocket.write(proxyHead);
+        if (head.length > 0) proxySocket.write(head);
+
+        // Bidirectional pipe
+        proxySocket.pipe(clientSocket);
+        clientSocket.pipe(proxySocket);
+
+        // Clean up on errors or close
+        proxySocket.on('error', (err) => {
+            console.error('[WS] Upstream error:', err.message);
+            clientSocket.destroy();
+        });
+        clientSocket.on('error', (err) => {
+            console.error('[WS] Client error:', err.message);
+            proxySocket.destroy();
+        });
+        proxySocket.on('close', () => clientSocket.destroy());
+        clientSocket.on('close', () => proxySocket.destroy());
+    });
+
+    // If the upstream rejects the upgrade, send back the HTTP error
+    proxyReq.on('response', (res) => {
+        console.error(`[WS Upgrade] Rejected: ${res.statusCode} ${res.statusMessage}`);
+        let headers = `HTTP/1.1 ${res.statusCode} ${res.statusMessage}\r\n`;
+        const rawHeaders = res.rawHeaders;
+        for (let i = 0; i < rawHeaders.length; i += 2) {
+            headers += `${rawHeaders[i]}: ${rawHeaders[i + 1]}\r\n`;
+        }
+        headers += '\r\n';
+        clientSocket.write(headers);
+        res.pipe(clientSocket);
+    });
+
+    proxyReq.on('error', (err) => {
+        console.error('[WS Upgrade Error]', err.message);
+        clientSocket.destroy();
+    });
+
+    proxyReq.end();
+});
 
 server.listen(PORT, () => {
     console.log(`Reverse proxy server running on port ${PORT}`);
