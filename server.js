@@ -50,7 +50,11 @@ function spoofTestDetails(text) {
 }
 
 function getProxyUrlForDomain(targetDomain, proxyOrigin) {
-    return `${proxyOrigin}/__extproxy__/${targetDomain}`;
+    if (!PROXY_DOMAIN) {
+        return `${proxyOrigin}/__extproxy__/${targetDomain}`;
+    }
+    // Keep dots instead of converting to hyphens
+    return `https://${targetDomain}.${PROXY_DOMAIN}`;
 }
 
 const app = express();
