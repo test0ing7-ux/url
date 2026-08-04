@@ -4,7 +4,7 @@ export default {
     const host = url.hostname;
     
     // Your Render backend URL (update after deploying to Render)
-    const BACKEND_HOST = env.BACKEND_HOST || 'your-app.onrender.com';
+    const BACKEND_HOST = env.BACKEND_HOST || 'url-hjq1.onrender.com';
     
     let target = null;
     const PROXY_DOMAIN = env.PROXY_DOMAIN || 'cuhp.duckdns.org';
