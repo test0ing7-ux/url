@@ -33,7 +33,7 @@ cd /home/ubuntu
 if [ -d "proxy" ]; then
     cd proxy && git pull
 else
-    git clone YOUR_GITHUB_REPO_URL proxy
+    git clone https://github.com/test0ing7-ux/url proxy
     cd proxy
 fi
 npm install --production
@@ -53,8 +53,8 @@ ExecStart=/usr/bin/node server.js
 Restart=always
 RestartSec=5
 Environment=PORT=3000
-Environment=PROXY_DOMAIN=edvu.in
-Environment=GROQ_API_KEY=YOUR_GROQ_KEY_HERE
+Environment=PROXY_DOMAIN=cuhp.duckdns.org
+Environment=GROQ_API_KEY=your_groq_api_key_here
 
 [Install]
 WantedBy=multi-user.target
