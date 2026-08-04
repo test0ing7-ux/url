@@ -391,7 +391,11 @@ app.use('/__extproxy__', createProxyMiddleware({
             // Override CORS
             res.setHeader('Access-Control-Allow-Origin', '*');
 
-            // ── Decompress the response body ──
+            if (req.method === 'HEAD' || proxyRes.statusCode === 204 || proxyRes.statusCode === 304) {
+                res.statusCode = proxyRes.statusCode;
+                return res.end();
+            }
+
             const encoding = (proxyRes.headers['content-encoding'] || '').toLowerCase();
             let stream = proxyRes;
             if (encoding === 'gzip') {
@@ -731,6 +735,11 @@ app.use((req, res, next) => {
                 res.setHeader('Pragma', 'no-cache');
                 res.setHeader('Expires', '0');
 
+                if (req.method === 'HEAD' || proxyRes.statusCode === 204 || proxyRes.statusCode === 304) {
+                    res.statusCode = proxyRes.statusCode;
+                    return res.end();
+                }
+
                 // Determine if we need to decompress
                 const encoding = (proxyRes.headers['content-encoding'] || '').toLowerCase();
                 let stream = proxyRes;
@@ -741,6 +750,11 @@ app.use((req, res, next) => {
                 } else if (encoding === 'deflate') {
                     stream = proxyRes.pipe(zlib.createInflate());
                 }
+                
+                stream.on('error', (err) => {
+                    console.error('[Proxy] Stream decompression error:', err.message);
+                    if (!res.headersSent) res.status(502).send('Proxy decompression error');
+                });
 
                 // Collect the (decompressed) response body
                 const chunks = [];
