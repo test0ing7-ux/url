@@ -399,7 +399,13 @@ app.use('/__extproxy__', createProxyMiddleware({
             });
 
             // Override CORS
-            res.setHeader('Access-Control-Allow-Origin', '*');
+            const origin = req.headers.origin;
+            if (origin) {
+                res.setHeader('Access-Control-Allow-Origin', origin);
+                res.setHeader('Access-Control-Allow-Credentials', 'true');
+            } else {
+                res.setHeader('Access-Control-Allow-Origin', '*');
+            }
 
             if (req.method === 'HEAD' || proxyRes.statusCode === 204 || proxyRes.statusCode === 304) {
                 res.statusCode = proxyRes.statusCode;
@@ -740,7 +746,13 @@ app.use((req, res, next) => {
                 });
 
                 // Override CORS & Cache
-                res.setHeader('Access-Control-Allow-Origin', '*');
+                const origin = req.headers.origin;
+                if (origin) {
+                    res.setHeader('Access-Control-Allow-Origin', origin);
+                    res.setHeader('Access-Control-Allow-Credentials', 'true');
+                } else {
+                    res.setHeader('Access-Control-Allow-Origin', '*');
+                }
                 res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
                 res.setHeader('Pragma', 'no-cache');
                 res.setHeader('Expires', '0');
