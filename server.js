@@ -889,7 +889,7 @@ app.use((req, res, next) => {
                                 function rewriteUrl(url) {
                                     if (!url || typeof url !== 'string') return url;
                                     return url.replace(new RegExp('https?://([a-z0-9][a-z0-9.-]*\\\\.testpad\\\\.chitkara[a-z]*\\\\.edu\\\\.in)(?=[/:?#]|$)', 'gi'), function(m, host) {
-                                        if (PD) return 'https://' + host.split('.').join('-') + '.' + PD;
+                                        if (PD) return 'https://' + host + '.' + PD;
                                         return proxyOrigin + '/__extproxy__/' + host;
                                     });
                                 }
@@ -958,6 +958,12 @@ app.use((req, res, next) => {
                         // ── Disable target Service Workers ──
                         // The testpad app has a __sw.js that breaks CORS on our proxy.
                         text = text.replace(/navigator\.serviceWorker\.register/g, 'Promise.reject("SW Disabled").catch');
+
+                        // ── Spoof Desktop App Platform ──
+                        // Force the platform property to 3 (Desktop App) instead of 2 (Web Browser)
+                        // to bypass the backend rejection of web logins on app-only tests.
+                        text = text.replace(/"platform"\s*:\s*2/g, '"platform":3');
+                        text = text.replace(/platform\s*:\s*2/g, 'platform:3');
 
                         // ── Fix isChitkara hostname check ──
                         // Force it to match the target domain so the app works correctly through the proxy
