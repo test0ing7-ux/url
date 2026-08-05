@@ -895,6 +895,8 @@ app.use((req, res, next) => {
                                 }
                                 try{Object.defineProperty(document,'referrer',{get:function(){return ro+'/'}});}catch(e){}
                                 try{Object.defineProperty(document,'domain',{get:function(){return rd},set:function(){}});}catch(e){}
+                                try{Object.defineProperty(navigator,'userAgent',{get:function(){return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Testpad/1.0.0 Chrome/100.0.4896.160 Electron/18.3.0 Safari/537.36";}});}catch(e){}
+                                try{window.process={type:'renderer',versions:{electron:'18.3.0'}};}catch(e){}
                                 var oA=window.location.assign,oR=window.location.replace;
                                 if(oA)window.location.assign=function(u){return oA.call(window.location,rewriteUrl(u))};
                                 if(oR)window.location.replace=function(u){return oR.call(window.location,rewriteUrl(u))};
